@@ -1,0 +1,260 @@
+import { useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import { ArrowLeft, Star, Minus, Plus, ShoppingBag, Sparkles, X, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { products } from "@/data/products";
+import { useCart } from "@/contexts/CartContext";
+import { useToast } from "@/hooks/use-toast";
+
+export default function ProductDetailsPage() {
+  const { id } = useParams();
+  const product = products.find((p) => p.id === id);
+  const [selectedSize, setSelectedSize] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [showTryOn, setShowTryOn] = useState(false);
+  const { addToCart } = useCart();
+  const { toast } = useToast();
+
+  if (!product) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Product not found</h1>
+          <Link to="/shop">
+            <Button>Back to Shop</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const handleAddToCart = () => {
+    if (!selectedSize) {
+      toast({
+        title: "Please select a size",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    addToCart(product, selectedSize, quantity);
+    toast({
+      title: "Added to cart!",
+      description: `${product.name} has been added to your cart.`,
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8">
+        {/* Breadcrumb */}
+        <Link
+          to="/shop"
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Shop
+        </Link>
+
+        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
+          {/* Product Images */}
+          <div className="space-y-4">
+            <div className="aspect-square rounded-2xl bg-secondary overflow-hidden">
+              <img
+                src={product.images[0]}
+                alt={product.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="aspect-square rounded-lg bg-secondary overflow-hidden cursor-pointer hover:ring-2 ring-primary transition-all"
+                >
+                  <img
+                    src={product.images[0]}
+                    alt={`${product.name} view ${i}`}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Product Info */}
+          <div className="space-y-6">
+            <div>
+              <p className="text-sm text-primary font-medium uppercase tracking-wide">
+                {product.category}
+              </p>
+              <h1 className="font-display text-3xl md:text-4xl font-bold mt-2">
+                {product.name}
+              </h1>
+
+              <div className="flex items-center gap-3 mt-4">
+                <div className="flex items-center gap-1">
+                  <Star className="w-5 h-5 fill-amber text-amber" />
+                  <span className="font-semibold">{product.rating}</span>
+                </div>
+                <span className="text-muted-foreground">
+                  ({product.reviews} reviews)
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-baseline gap-3">
+              <span className="text-3xl font-bold text-primary">
+                ₹{product.price.toLocaleString()}
+              </span>
+              {product.originalPrice && (
+                <span className="text-xl text-muted-foreground line-through">
+                  ₹{product.originalPrice.toLocaleString()}
+                </span>
+              )}
+            </div>
+
+            <p className="text-muted-foreground leading-relaxed">
+              {product.description}
+            </p>
+
+            <div className="space-y-4 pt-4 border-t border-border">
+              <div>
+                <p className="font-medium mb-3">Material</p>
+                <span className="inline-block px-4 py-2 bg-secondary rounded-lg text-sm">
+                  {product.material}
+                </span>
+              </div>
+
+              <div>
+                <p className="font-medium mb-3">Color</p>
+                <span className="inline-block px-4 py-2 bg-secondary rounded-lg text-sm">
+                  {product.color}
+                </span>
+              </div>
+
+              <div>
+                <p className="font-medium mb-3">Size</p>
+                <div className="flex flex-wrap gap-3">
+                  {product.sizes.map((size) => (
+                    <button
+                      key={size}
+                      onClick={() => setSelectedSize(size)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        selectedSize === size
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary hover:bg-secondary/80"
+                      }`}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="font-medium mb-3">Quantity</p>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="text-lg font-semibold w-8 text-center">
+                    {quantity}
+                  </span>
+                  <button
+                    onClick={() => setQuantity(quantity + 1)}
+                    className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 pt-6">
+              <Button
+                size="lg"
+                className="btn-primary flex-1 gap-2"
+                onClick={handleAddToCart}
+              >
+                <ShoppingBag className="w-5 h-5" />
+                Add to Cart
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="btn-outline flex-1 gap-2"
+                onClick={() => setShowTryOn(true)}
+              >
+                <Sparkles className="w-5 h-5" />
+                Try with AI
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Try-On Modal */}
+      {showTryOn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-sm">
+          <div className="bg-card rounded-2xl w-full max-w-lg p-6 animate-scale-in">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-display text-xl font-semibold">AI Try-On</h2>
+              <button
+                onClick={() => setShowTryOn(false)}
+                className="p-2 hover:bg-secondary rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="border-2 border-dashed border-border rounded-xl p-8 text-center">
+                <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="font-medium mb-2">Upload Your Photo</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  JPG, PNG up to 5MB
+                </p>
+                <Button variant="outline" size="sm">
+                  Choose File
+                </Button>
+              </div>
+
+              <div>
+                <p className="font-medium mb-3">Select Lungi Pattern</p>
+                <div className="grid grid-cols-4 gap-3">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="aspect-square rounded-lg bg-secondary overflow-hidden cursor-pointer hover:ring-2 ring-primary transition-all"
+                    >
+                      <img
+                        src="/placeholder.svg"
+                        alt={`Pattern ${i}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-secondary rounded-xl p-6 text-center">
+                <p className="text-muted-foreground">
+                  Preview will appear here
+                </p>
+              </div>
+
+              <Button className="w-full btn-primary gap-2" disabled>
+                <Sparkles className="w-5 h-5" />
+                Generate Try-On (Coming Soon)
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
