@@ -1,30 +1,35 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { User as FirebaseUser } from "firebase/auth";
+import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { auth, db } from "@/firebase";
 import {
-  signIn as firebaseSignIn,
-  signUp as firebaseSignUp,
-  logout as firebaseLogout,
-  signInWithGoogle as firebaseSignInWithGoogle,
-  subscribeToAuthChanges
-} from "../lib/auth";
-import { getDocument, setDocument } from "../lib/firestore";
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  User as FirebaseUser,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from "firebase/auth";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
-interface UserProfile {
+type Role = "customer" | "admin" | "unknown";
+
+interface AppUser {
   id: string;
-  name: string;
   email: string;
-  role: "customer" | "admin";
-  photoURL?: string;
-  createdAt?: any;
+  role: Role;
 }
 
 interface AuthContextType {
-  user: UserProfile | null;
-  firebaseUser: FirebaseUser | null;
+  user: AppUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  signup: (name: string, email: string, password: string) => Promise<boolean>;
-  loginWithGoogle: () => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  signup: (
+    name: string,
+    email: string,
+    password: string,
+    mobile: string
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  googleSignIn: () => Promise<{ ok: true } | { ok: false; error: string }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -32,118 +37,146 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function getUserRole(uid: string): Promise<Role | null> {
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  const data = snap.data() as { role?: Role };
+  return data.role ?? null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load user profile from Firestore
-  const loadUserProfile = async (fbUser: FirebaseUser) => {
-    try {
-      const profile = await getDocument<UserProfile>("users", fbUser.uid);
-
-      if (profile) {
-        setUser(profile);
-      } else {
-        // Create new user profile if doesn't exist
-        const newProfile: UserProfile = {
-          id: fbUser.uid,
-          name: fbUser.displayName || "User",
-          email: fbUser.email || "",
-          role: "customer",
-          photoURL: fbUser.photoURL || undefined,
-        };
-
-        await setDocument("users", fbUser.uid, newProfile, false);
-        setUser(newProfile);
-      }
-    } catch (error) {
-      console.error("Error loading user profile:", error);
-    }
-  };
-
-  // Subscribe to Firebase auth changes
   useEffect(() => {
-    const unsubscribe = subscribeToAuthChanges(async (fbUser) => {
-      setFirebaseUser(fbUser);
-
-      if (fbUser) {
-        await loadUserProfile(fbUser);
-      } else {
+    const unsub = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
+      if (!fbUser) {
         setUser(null);
+        setLoading(false);
+        return;
       }
-
+      // Set immediately for instant UI/navigation; role unknown for now
+      setUser({ id: fbUser.uid, email: fbUser.email || "", role: "unknown" });
       setLoading(false);
+      // Background role fetch and enforcement
+      getUserRole(fbUser.uid)
+        .then(async (role) => {
+          if (!role) return; // No doc yet (e.g., just signed up) - allow UI to proceed
+          if (role !== "customer") {
+            await signOut(auth);
+            setUser(null);
+          } else {
+            setUser((prev) => (prev ? { ...prev, role: "customer" } : prev));
+          }
+        })
+        .catch((e) => {
+          console.warn("role fetch failed", e);
+        });
     });
-
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string) => {
     try {
-      await firebaseSignIn(email, password);
-      return true;
-    } catch (error: any) {
-      console.error("Login failed:", error);
-      return false;
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      // Set immediately; do not block on role fetch
+      setUser({ id: cred.user.uid, email: cred.user.email || "", role: "unknown" });
+      // Background enforcement
+      getUserRole(cred.user.uid)
+        .then(async (role) => {
+          if (role !== "customer") {
+            await signOut(auth);
+            setUser(null);
+          } else {
+            setUser((prev) => (prev ? { ...prev, role: "customer" } : prev));
+          }
+        })
+        .catch((e) => console.warn("role fetch failed", e));
+      return { ok: true as const };
+    } catch (e: any) {
+      console.error(e);
+      const msg = e?.message || "Login failed";
+      return { ok: false as const, error: msg };
     }
   };
 
-  const signup = async (name: string, email: string, password: string): Promise<boolean> => {
+  const signup = async (name: string, email: string, password: string, mobile: string) => {
     try {
-      const userCredential = await firebaseSignUp(email, password, name);
-
-      // Create user profile in Firestore
-      const newProfile: UserProfile = {
-        id: userCredential.user.uid,
-        name,
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      // Set immediately; write profile in background for speed
+      setUser({ id: cred.user.uid, email: cred.user.email || "", role: "unknown" });
+      setDoc(doc(db, "users", cred.user.uid), {
         email,
-        role: "customer",
-      };
-
-      await setDocument("users", userCredential.user.uid, newProfile, false);
-      return true;
-    } catch (error: any) {
-      console.error("Signup failed:", error);
-      return false;
+        role: "customer" as Role,
+        createdAt: serverTimestamp(),
+        name,
+        mobile,
+      })
+        .then(() => setUser((prev) => (prev ? { ...prev, role: "customer" } : prev)))
+        .catch((e) => console.warn("profile write failed", e));
+      return { ok: true as const };
+    } catch (e: any) {
+      console.error(e);
+      const msg = e?.message || "Signup failed";
+      return { ok: false as const, error: msg };
     }
   };
 
-  const loginWithGoogle = async (): Promise<boolean> => {
+  const googleSignIn = async () => {
     try {
-      await firebaseSignInWithGoogle();
-      return true;
-    } catch (error: any) {
-      console.error("Google login failed:", error);
-      return false;
+      const provider = new GoogleAuthProvider();
+      const cred = await signInWithPopup(auth, provider);
+      const uid = cred.user.uid;
+      // Set immediately
+      setUser({ id: uid, email: cred.user.email || "", role: "unknown" });
+      // Background: ensure profile exists and enforce role
+      const userRef = doc(db, "users", uid);
+      getDoc(userRef)
+        .then((snap) => {
+          if (!snap.exists()) {
+            return setDoc(userRef, {
+              email: cred.user.email || "",
+              name: cred.user.displayName || "",
+              role: "customer" as Role,
+              createdAt: serverTimestamp(),
+            });
+          }
+          const data = snap.data() as { role?: Role };
+          if (data.role !== "customer") {
+            return signOut(auth).then(() => setUser(null));
+          }
+          setUser((prev) => (prev ? { ...prev, role: "customer" } : prev));
+        })
+        .catch((e) => console.warn("google profile ensure failed", e));
+      return { ok: true as const };
+    } catch (e: any) {
+      console.error(e);
+      const msg = e?.message || "Google sign-in failed";
+      return { ok: false as const, error: msg };
     }
   };
 
-  const logout = async (): Promise<void> => {
-    try {
-      await firebaseLogout();
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
+  const logout = async () => {
+    await signOut(auth);
+    setUser(null);
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        firebaseUser,
-        loading,
-        login,
-        signup,
-        loginWithGoogle,
-        logout,
-        isAuthenticated: !!user,
-        isAdmin: user?.role === "admin",
-      }}
-    >
-      {!loading && children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      loading,
+      login,
+      signup,
+      googleSignIn,
+      logout,
+      isAuthenticated: !!user,
+      isAdmin: user?.role === "admin",
+    }),
+    [user, loading]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

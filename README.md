@@ -1,53 +1,73 @@
-# Edmund Lungi's Store
+# Welcome to your Lovable project
 
-Welcome to Edmund Lungi's, your premier destination for premium handcrafted lungis. We blend traditional craftsmanship with modern comfort to bring you the finest quality silk, cotton, and designer lungis.
+## Project info
 
-## Project Info
+**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
 
-This project is a modern e-commerce platform built with:
+## How can I edit this code?
 
-- **Vite** - Next Generation Frontend Tooling
-- **React** - A JavaScript library for building user interfaces
-- **TypeScript** - JavaScript with syntax for types
-- **Tailwind CSS** - A utility-first CSS framework
-- **Shadcn UI** - Re-usable components built using Radix UI and Tailwind CSS
+There are several ways of editing your application.
 
-## Getting Started
+**Use Lovable**
 
-To get a local copy up and running follow these simple steps.
+Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
 
-### Prerequisites
+Changes made via Lovable will be committed automatically to this repo.
 
-- npm
-  ```sh
-  npm install npm@latest -g
-  ```
+**Use your preferred IDE**
 
-### Installation
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
 
-1. Clone the repo
-   ```sh
-   git clone https://github.com/your_username_/repo_name.git
-   ```
-2. Install NPM packages
-   ```sh
-   npm install
-   ```
-3. Start the development server
-   ```sh
-   npm run dev
-   ```
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
-## Contributing
+Follow these steps:
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+```sh
+# Step 1: Clone the repository using the project's Git URL.
+git clone <YOUR_GIT_URL>
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+# Step 2: Navigate to the project directory.
+cd <YOUR_PROJECT_NAME>
 
-## License
+# Step 3: Install the necessary dependencies.
+npm i
 
-Distributed under the MIT License. See `LICENSE` for more information.
+# Step 4: Start the development server with auto-reloading and an instant preview.
+npm run dev
+```
+
+**Edit a file directly in GitHub**
+
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
+
+**Use GitHub Codespaces**
+
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
+
+## What technologies are used for this project?
+
+This project is built with:
+
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
+
+## How can I deploy this project?
+
+Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+
+## Can I connect a custom domain to my Lovable project?
+
+Yes, you can!
+
+To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+
+Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
