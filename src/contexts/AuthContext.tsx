@@ -1,15 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
-import { auth, db } from "@/firebase";
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  User as FirebaseUser,
-  GoogleAuthProvider,
-  signInWithPopup,
-} from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { supabase } from "@/supabase";
 
 type Role = "customer" | "admin" | "unknown";
 
@@ -37,12 +27,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-async function getUserRole(uid: string): Promise<Role | null> {
-  const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
-  const data = snap.data() as { role?: Role };
-  return data.role ?? null;
+function roleFromMetadata(user: any): Role {
+  const meta = user?.user_metadata || {};
+  const role = (meta.role as Role | undefined) || "customer";
+  return role;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -50,49 +38,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
-      if (!fbUser) {
+    // Initialize with current session
+    supabase.auth.getSession().then(({ data }) => {
+      const s = data.session;
+      if (!s?.user) {
         setUser(null);
         setLoading(false);
         return;
       }
-      // Set immediately for instant UI/navigation; role unknown for now
-      setUser({ id: fbUser.uid, email: fbUser.email || "", role: "unknown" });
+      const role = roleFromMetadata(s.user);
+      setUser({ id: s.user.id, email: s.user.email || "", role });
       setLoading(false);
-      // Background role fetch and enforcement
-      getUserRole(fbUser.uid)
-        .then(async (role) => {
-          if (!role) return; // No doc yet (e.g., just signed up) - allow UI to proceed
-          if (role !== "customer") {
-            await signOut(auth);
-            setUser(null);
-          } else {
-            setUser((prev) => (prev ? { ...prev, role: "customer" } : prev));
-          }
-        })
-        .catch((e) => {
-          console.warn("role fetch failed", e);
-        });
     });
-    return () => unsub();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const u = session?.user;
+      if (!u) {
+        setUser(null);
+        return;
+      }
+      const role = roleFromMetadata(u);
+      setUser({ id: u.id, email: u.email || "", role });
+    });
+    return () => {
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      // Set immediately; do not block on role fetch
-      setUser({ id: cred.user.uid, email: cred.user.email || "", role: "unknown" });
-      // Background enforcement
-      getUserRole(cred.user.uid)
-        .then(async (role) => {
-          if (role !== "customer") {
-            await signOut(auth);
-            setUser(null);
-          } else {
-            setUser((prev) => (prev ? { ...prev, role: "customer" } : prev));
-          }
-        })
-        .catch((e) => console.warn("role fetch failed", e));
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      const u = data.user;
+      if (!u) return { ok: false as const, error: "Login failed" };
+      const role = roleFromMetadata(u);
+      setUser({ id: u.id, email: u.email || "", role });
       return { ok: true as const };
     } catch (e: any) {
       console.error(e);
@@ -103,18 +83,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = async (name: string, email: string, password: string, mobile: string) => {
     try {
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      // Set immediately; write profile in background for speed
-      setUser({ id: cred.user.uid, email: cred.user.email || "", role: "unknown" });
-      setDoc(doc(db, "users", cred.user.uid), {
+      const { data, error } = await supabase.auth.signUp({
         email,
-        role: "customer" as Role,
-        createdAt: serverTimestamp(),
-        name,
-        mobile,
-      })
-        .then(() => setUser((prev) => (prev ? { ...prev, role: "customer" } : prev)))
-        .catch((e) => console.warn("profile write failed", e));
+        password,
+        options: {
+          data: { name, mobile, role: "customer" as Role },
+        },
+      });
+      if (error) throw error;
+      const u = data.user;
+      if (!u) return { ok: true as const }; // may need email verification
+      const role = roleFromMetadata(u);
+      setUser({ id: u.id, email: u.email || "", role });
       return { ok: true as const };
     } catch (e: any) {
       console.error(e);
@@ -125,30 +105,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const googleSignIn = async () => {
     try {
-      const provider = new GoogleAuthProvider();
-      const cred = await signInWithPopup(auth, provider);
-      const uid = cred.user.uid;
-      // Set immediately
-      setUser({ id: uid, email: cred.user.email || "", role: "unknown" });
-      // Background: ensure profile exists and enforce role
-      const userRef = doc(db, "users", uid);
-      getDoc(userRef)
-        .then((snap) => {
-          if (!snap.exists()) {
-            return setDoc(userRef, {
-              email: cred.user.email || "",
-              name: cred.user.displayName || "",
-              role: "customer" as Role,
-              createdAt: serverTimestamp(),
-            });
-          }
-          const data = snap.data() as { role?: Role };
-          if (data.role !== "customer") {
-            return signOut(auth).then(() => setUser(null));
-          }
-          setUser((prev) => (prev ? { ...prev, role: "customer" } : prev));
-        })
-        .catch((e) => console.warn("google profile ensure failed", e));
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin },
+      });
+      if (error) throw error;
+      // Redirect will occur; return ok to satisfy caller
       return { ok: true as const };
     } catch (e: any) {
       console.error(e);
@@ -158,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     setUser(null);
   };
 
