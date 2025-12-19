@@ -4,20 +4,15 @@ import { ReactNode } from "react";
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  adminOnly?: boolean;
 }
 
-export function ProtectedRoute({ children, adminOnly = false }: ProtectedRouteProps) {
-  const { isAuthenticated, isAdmin, loading } = useAuth();
+export function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { isAuthenticated, loading } = useAuth();
 
   if (loading) return null;
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
-  }
-
-  if (adminOnly && !isAdmin) {
-    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;

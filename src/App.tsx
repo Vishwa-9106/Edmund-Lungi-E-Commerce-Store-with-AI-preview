@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { MainLayout } from "@/layouts/MainLayout";
-import { AdminLayout } from "@/layouts/AdminLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { lazy, Suspense } from "react";
 
@@ -21,11 +20,13 @@ const FAQPage = lazy(() => import("@/pages/FAQ/FAQPage"));
 const LoginPage = lazy(() => import("@/pages/Login/LoginPage"));
 const SignupPage = lazy(() => import("@/pages/Signup/SignupPage"));
 const CustomerDashboard = lazy(() => import("@/pages/CustomerDashboard/CustomerDashboard"));
-const AdminDashboard = lazy(() => import("@/pages/Admin/Dashboard/AdminDashboard"));
-const SalesAnalysisPage = lazy(() => import("@/pages/Admin/SalesAnalysis/SalesAnalysisPage"));
-const ProductsPage = lazy(() => import("@/pages/Admin/Products/ProductsPage"));
-const OrdersPage = lazy(() => import("@/pages/Admin/Orders/OrdersPage"));
-const UsersPage = lazy(() => import("@/pages/Admin/Users/UsersPage"));
+const AdminPage = lazy(() => import("@/pages/Admin/AdminPage"));
+const AdminDashboardPage = lazy(() => import("@/pages/Admin/DashboardPage"));
+const AdminSalesAnalyticsPage = lazy(() => import("@/pages/Admin/SalesAnalyticsPage"));
+const AdminOrdersPage = lazy(() => import("@/pages/Admin/OrdersPage"));
+const AdminProductsPage = lazy(() => import("@/pages/Admin/ProductsPage"));
+const AdminCustomersPage = lazy(() => import("@/pages/Admin/CustomersPage"));
+const AdminMarketingPage = lazy(() => import("@/pages/Admin/MarketingPage"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -68,17 +69,14 @@ const App = () => (
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/signup" element={<SignupPage />} />
 
-                {/* Admin Routes */}
-                <Route path="/admin" element={
-                  <ProtectedRoute adminOnly>
-                    <AdminLayout />
-                  </ProtectedRoute>
-                }>
-                  <Route index element={<AdminDashboard />} />
-                  <Route path="sales" element={<SalesAnalysisPage />} />
-                  <Route path="products" element={<ProductsPage />} />
-                  <Route path="orders" element={<OrdersPage />} />
-                  <Route path="users" element={<UsersPage />} />
+                {/* Admin Route (blank page, no layout) */}
+                <Route path="/admin" element={<AdminPage />}>
+                  <Route path="dashboard" element={<AdminDashboardPage />} />
+                  <Route path="sales-analytics" element={<AdminSalesAnalyticsPage />} />
+                  <Route path="orders" element={<AdminOrdersPage />} />
+                  <Route path="products" element={<AdminProductsPage />} />
+                  <Route path="customers" element={<AdminCustomersPage />} />
+                  <Route path="marketing" element={<AdminMarketingPage />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

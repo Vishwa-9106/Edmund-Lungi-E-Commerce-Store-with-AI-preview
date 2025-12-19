@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ShoppingBag, Menu, X, User } from "lucide-react";
+import { ShoppingBag, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
@@ -17,7 +17,7 @@ import {
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
-  const { isAuthenticated, isAdmin, logout } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const { totalItems } = useCart();
 
   const navLinks = [
@@ -62,12 +62,6 @@ export function Navbar() {
             {/* Auth */}
             {isAuthenticated ? (
               <div className="hidden md:flex items-center gap-3">
-                <Link to={isAdmin ? "/admin" : "/dashboard"}>
-                  <Button variant="ghost" size="sm" className="gap-2">
-                    <User className="w-4 h-4" />
-                    Dashboard
-                  </Button>
-                </Link>
                 <Button variant="outline" size="sm" onClick={() => setIsLogoutDialogOpen(true)}>
                   Logout
                 </Button>
@@ -130,13 +124,6 @@ export function Navbar() {
               ))}
               {isAuthenticated ? (
                 <>
-                  <Link
-                    to={isAdmin ? "/admin" : "/dashboard"}
-                    className="px-4 py-3 hover:bg-secondary rounded-lg transition-colors"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Dashboard
-                  </Link>
                   <button
                     onClick={() => {
                       setIsMenuOpen(false);

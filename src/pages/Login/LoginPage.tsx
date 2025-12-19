@@ -13,15 +13,15 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
-  const { login, googleSignIn, isAuthenticated, loading } = useAuth();
+  const { login, googleSignIn, isAuthenticated, loading, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!loading && isAuthenticated) {
+    if (!loading && isAuthenticated && user) {
       navigate("/home", { replace: true });
     }
-  }, [isAuthenticated, loading, navigate]);
+  }, [isAuthenticated, user, loading, navigate]);
 
   const validate = () => {
     const next: typeof errors = {};
@@ -40,9 +40,10 @@ export default function LoginPage() {
 
     if (result.ok) {
       toast({ title: "Welcome back!", description: "You have been logged in successfully." });
-      navigate("/home", { replace: true });
+      // Navigation will be handled by the useEffect above after the role is properly set
     } else {
-      toast({ title: "Login failed", description: result.error || "Please check your credentials and try again.", variant: "destructive" });
+      const message = "error" in result ? result.error : "Please check your credentials and try again.";
+      toast({ title: "Login failed", description: message, variant: "destructive" });
     }
   };
 
@@ -54,7 +55,8 @@ export default function LoginPage() {
       toast({ title: "Welcome!", description: "Logged in with Google." });
       navigate("/home", { replace: true });
     } else {
-      toast({ title: "Google login failed", description: result.error, variant: "destructive" });
+      const message = "error" in result ? result.error : "Google login failed";
+      toast({ title: "Google login failed", description: message, variant: "destructive" });
     }
   };
 

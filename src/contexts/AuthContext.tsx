@@ -27,10 +27,24 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function roleFromMetadata(user: any): Role {
-  const meta = user?.user_metadata || {};
-  const role = (meta.role as Role | undefined) || "customer";
-  return role;
+async function fetchUserRole(userId: string): Promise<Role> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching user role:', error);
+      return "customer";
+    }
+    
+    return (data.role as Role) || "customer";
+  } catch (error) {
+    console.error('Error fetching user role:', error);
+    return "customer";
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -39,25 +53,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Initialize with current session
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       const s = data.session;
       if (!s?.user) {
         setUser(null);
         setLoading(false);
         return;
       }
-      const role = roleFromMetadata(s.user);
+      const role = await fetchUserRole(s.user.id);
       setUser({ id: s.user.id, email: s.user.email || "", role });
       setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const u = session?.user;
       if (!u) {
         setUser(null);
         return;
       }
-      const role = roleFromMetadata(u);
+      const role = await fetchUserRole(u.id);
       setUser({ id: u.id, email: u.email || "", role });
     });
     return () => {
@@ -71,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       const u = data.user;
       if (!u) return { ok: false as const, error: "Login failed" };
-      const role = roleFromMetadata(u);
+      const role = await fetchUserRole(u.id);
       setUser({ id: u.id, email: u.email || "", role });
       return { ok: true as const };
     } catch (e: any) {
