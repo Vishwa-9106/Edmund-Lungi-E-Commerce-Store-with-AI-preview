@@ -4,9 +4,19 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose
+} from "@/components/ui/dialog";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const { isAuthenticated, isAdmin, logout } = useAuth();
   const { totalItems } = useCart();
 
@@ -58,9 +68,33 @@ export function Navbar() {
                     Dashboard
                   </Button>
                 </Link>
-                <Button variant="outline" size="sm" onClick={logout}>
+                <Button variant="outline" size="sm" onClick={() => setIsLogoutDialogOpen(true)}>
                   Logout
                 </Button>
+                <Dialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Confirmation</DialogTitle>
+                      <DialogDescription>
+                        Are you sure?
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="outline">No</Button>
+                      </DialogClose>
+                      <Button 
+                        variant="default" 
+                        onClick={() => {
+                          logout();
+                          setIsLogoutDialogOpen(false);
+                        }}
+                      >
+                        Yes
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             ) : (
               <Link to="/login" className="hidden md:block">
@@ -105,8 +139,8 @@ export function Navbar() {
                   </Link>
                   <button
                     onClick={() => {
-                      logout();
                       setIsMenuOpen(false);
+                      setIsLogoutDialogOpen(true);
                     }}
                     className="px-4 py-3 text-left hover:bg-secondary rounded-lg transition-colors text-destructive"
                   >
