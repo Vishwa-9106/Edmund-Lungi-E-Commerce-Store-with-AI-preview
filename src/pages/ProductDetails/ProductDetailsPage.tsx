@@ -1,19 +1,93 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Star, Minus, Plus, ShoppingBag, Sparkles, X, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { products } from "@/data/products";
+import type { Product } from "@/data/products";
 import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/supabase";
 
 export default function ProductDetailsPage() {
   const { id } = useParams();
-  const product = products.find((p) => p.id === id);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [showTryOn, setShowTryOn] = useState(false);
   const { addToCart } = useCart();
   const { toast } = useToast();
+
+  useEffect(() => {
+    let alive = true;
+
+    setLoading(true);
+    setProduct(null);
+
+    (async () => {
+      try {
+        if (!id) {
+          if (!alive) return;
+          setProduct(null);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("products")
+          .select(
+            "id,name,price,original_price,image_url,category,material,sizes,stock_quantity,is_active,description,color"
+          )
+          .eq("id", id)
+          .eq("is_active", true)
+          .single();
+
+        if (!alive) return;
+        if (error || !data) {
+          setProduct(null);
+          return;
+        }
+
+        const imageUrl = typeof (data as any).image_url === "string" && (data as any).image_url.length > 0
+          ? (data as any).image_url
+          : "/placeholder.svg";
+        const sizes = Array.isArray((data as any).sizes) ? ((data as any).sizes as string[]) : [];
+
+        setProduct({
+          id: String((data as any).id),
+          name: String((data as any).name ?? ""),
+          price: Number((data as any).price ?? 0),
+          originalPrice: (data as any).original_price == null ? undefined : Number((data as any).original_price),
+          description: String((data as any).description ?? ""),
+          category: String((data as any).category ?? ""),
+          color: String((data as any).color ?? ""),
+          material: String((data as any).material ?? ""),
+          sizes,
+          rating: 0,
+          reviews: 0,
+          images: [imageUrl],
+        });
+      } catch {
+        if (!alive) return;
+        setProduct(null);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-sm text-muted-foreground">Loading...</div>
+        </div>
+      </div>
+    );
+  }
 
   if (!product) {
     return (

@@ -1,9 +1,8 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { ProductCard } from "@/components/ProductCard";
-import { products } from "@/data/products";
+import type { Product } from "@/data/products";
 import { Button } from "@/components/ui/button";
-import { InputField } from "@/components/InputField";
 
 const colors = ["All", "Maroon", "Blue", "Gold", "White", "Green", "Navy", "Multi", "Cream"];
 const materials = ["All", "Pure Silk", "100% Cotton", "Cotton", "Silk Blend", "Silk Cotton", "Cotton Blend"];
@@ -23,17 +22,95 @@ export default function ShopPage() {
   const [selectedPriceRange, setSelectedPriceRange] = useState(priceRanges[0]);
   const [showFilters, setShowFilters] = useState(false);
 
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const didFetchRef = useRef(false);
+
+  useEffect(() => {
+    let alive = true;
+    if (didFetchRef.current) return;
+    didFetchRef.current = true;
+
+    setLoading(true);
+
+    (async () => {
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+        if (!supabaseUrl || !supabaseAnonKey) {
+          setProducts([]);
+          return;
+        }
+
+        let origin = supabaseUrl;
+        try {
+          origin = new URL(supabaseUrl).origin;
+        } catch {
+          // ignore
+        }
+
+        const url = `${origin}/rest/v1/products?select=id,name,price,original_price,image_url,category,material,sizes,stock_quantity,is_active,description,color&is_active=eq.true`;
+        const res = await fetch(url, {
+          headers: {
+            apikey: supabaseAnonKey,
+            Authorization: `Bearer ${supabaseAnonKey}`,
+          },
+        });
+
+        if (!alive) return;
+        if (!res.ok) {
+          setProducts([]);
+          return;
+        }
+
+        const data = (await res.json()) as unknown;
+        const rows = Array.isArray(data) ? data : [];
+        const mapped: Product[] = rows.map((row: any) => {
+          const imageUrl = typeof row.image_url === "string" && row.image_url.length > 0 ? row.image_url : "/placeholder.svg";
+          const sizes = Array.isArray(row.sizes) ? (row.sizes as string[]) : [];
+
+          return {
+            id: String(row.id),
+            name: String(row.name ?? ""),
+            price: Number(row.price ?? 0),
+            originalPrice: row.original_price == null ? undefined : Number(row.original_price),
+            description: String(row.description ?? ""),
+            category: String(row.category ?? ""),
+            color: String(row.color ?? ""),
+            material: String(row.material ?? ""),
+            sizes,
+            rating: 0,
+            reviews: 0,
+            images: [imageUrl],
+          };
+        });
+
+        setProducts(mapped);
+      } catch {
+        if (!alive) return;
+        setProducts([]);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchQuery.toLowerCase());
+        (product.description ?? "").toLowerCase().includes(searchQuery.toLowerCase());
       const matchesColor = selectedColor === "All" || product.color === selectedColor;
       const matchesMaterial = selectedMaterial === "All" || product.material === selectedMaterial;
       const matchesPrice = product.price >= selectedPriceRange.min && product.price <= selectedPriceRange.max;
 
       return matchesSearch && matchesColor && matchesMaterial && matchesPrice;
     });
-  }, [searchQuery, selectedColor, selectedMaterial, selectedPriceRange]);
+  }, [products, searchQuery, selectedColor, selectedMaterial, selectedPriceRange]);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -181,7 +258,11 @@ export default function ShopPage() {
             </div>
 
             {/* Products */}
-            {filteredProducts.length > 0 ? (
+            {loading ? (
+              <div className="text-sm text-muted-foreground">Loading...</div>
+            ) : products.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No products available</div>
+            ) : filteredProducts.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
                 {filteredProducts.map((product, i) => (
                   <div

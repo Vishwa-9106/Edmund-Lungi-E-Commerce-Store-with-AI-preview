@@ -25,6 +25,8 @@ export default function CustomersPage() {
   const [error, setError] = useState<string | null>(null);
   const didFetchRef = useRef(false);
 
+  const normalizedRole = (role: string | null | undefined) => (role ?? "").trim().toLowerCase();
+
   useEffect(() => {
     let alive = true;
     if (didFetchRef.current) return;
@@ -129,16 +131,45 @@ export default function CustomersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {customers.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell className="max-w-[220px] truncate">{c.id}</TableCell>
-                      <TableCell className="max-w-[260px] truncate">{c.email ?? ""}</TableCell>
-                      <TableCell>{c.role ?? ""}</TableCell>
-                      <TableCell className="max-w-[220px] truncate">{c.name ?? ""}</TableCell>
-                      <TableCell className="max-w-[180px] truncate">{c.mobile ?? ""}</TableCell>
-                      <TableCell className="max-w-[220px] truncate">{c.created_at ?? ""}</TableCell>
-                    </TableRow>
-                  ))}
+                  {(() => {
+                    const groups = customers.reduce<Record<string, CustomerRow[]>>((acc, c) => {
+                      const key = normalizedRole(c.role) || "unknown";
+                      (acc[key] ??= []).push(c);
+                      return acc;
+                    }, {});
+
+                    const roles = Object.keys(groups);
+                    roles.sort((a, b) => {
+                      const rank = (r: string) => (r === "admin" ? 0 : r === "user" ? 1 : 2);
+                      const ra = rank(a);
+                      const rb = rank(b);
+                      return ra !== rb ? ra - rb : a.localeCompare(b);
+                    });
+
+                    const roleLabel = (r: string) =>
+                      r === "admin" ? "Admin" : r === "user" ? "User" : r === "unknown" ? "Unknown" : r;
+
+                    return roles.flatMap((roleKey) => {
+                      const rows = groups[roleKey] ?? [];
+                      if (rows.length === 0) return [];
+
+                      return [
+                        <TableRow key={`role-${roleKey}`}>
+                          <TableCell colSpan={6}>{roleLabel(roleKey)}</TableCell>
+                        </TableRow>,
+                        ...rows.map((c) => (
+                          <TableRow key={c.id}>
+                            <TableCell className="max-w-[220px] truncate">{c.id}</TableCell>
+                            <TableCell className="max-w-[260px] truncate">{c.email ?? ""}</TableCell>
+                            <TableCell>{c.role ?? ""}</TableCell>
+                            <TableCell className="max-w-[220px] truncate">{c.name ?? ""}</TableCell>
+                            <TableCell className="max-w-[180px] truncate">{c.mobile ?? ""}</TableCell>
+                            <TableCell className="max-w-[220px] truncate">{c.created_at ?? ""}</TableCell>
+                          </TableRow>
+                        )),
+                      ];
+                    });
+                  })()}
                 </TableBody>
               </Table>
             )}
