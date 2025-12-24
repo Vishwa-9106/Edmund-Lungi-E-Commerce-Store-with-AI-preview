@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { supabase } from "@/supabase";
 
 type Role = "customer" | "admin" | "unknown";
@@ -50,31 +50,103 @@ async function fetchUserRole(userId: string): Promise<Role> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const initializedRef = useRef(false);
+  const pendingSessionRef = useRef<Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"] | null>(null);
 
   useEffect(() => {
-    // Initialize with current session
-    supabase.auth.getSession().then(async ({ data }) => {
-      const s = data.session;
-      if (!s?.user) {
+    let mounted = true;
+
+    const applySession = async (session: typeof pendingSessionRef.current) => {
+      if (!mounted) return;
+      if (!session?.user) {
         setUser(null);
-        setLoading(false);
         return;
       }
-      const role = await fetchUserRole(s.user.id);
-      setUser({ id: s.user.id, email: s.user.email || "", role });
-      setLoading(false);
+      const role = await fetchUserRole(session.user.id);
+      if (!mounted) return;
+      setUser({ id: session.user.id, email: session.user.email || "", role });
+    };
+
+    // Keep auth state in sync (login/logout/token refresh)
+    // but do not apply changes until initial getSession() restore completes.
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      try {
+        // eslint-disable-next-line no-console
+        console.log("[Auth] onAuthStateChange", {
+          event: _event,
+          hasSession: !!session,
+          userId: session?.user?.id || null,
+        });
+      } catch {
+        // ignore
+      }
+
+      pendingSessionRef.current = session;
+      if (!initializedRef.current) return;
+
+      try {
+        await applySession(session);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const u = session?.user;
-      if (!u) {
+    // Restore existing session on app load (source of truth)
+    (async () => {
+      try {
+        try {
+          const keys = Object.keys(window.localStorage || {}).filter((k) => k.includes("auth") || k.includes("sb-"));
+          // eslint-disable-next-line no-console
+          console.log("[Auth] storage keys (filtered)", keys);
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn("[Auth] localStorage not accessible", e);
+        }
+
+        const { data, error } = await supabase.auth.getSession();
+        if (!mounted) return;
+
+        try {
+          // eslint-disable-next-line no-console
+          console.log("[Auth] getSession result", {
+            error: error ? { message: (error as any).message, name: (error as any).name } : null,
+            hasSession: !!data.session,
+            userId: data.session?.user?.id || null,
+          });
+        } catch {
+          // ignore
+        }
+
+        if (error) {
+          console.error("Error restoring session:", error);
+          setUser(null);
+          initializedRef.current = true;
+          setLoading(false);
+          return;
+        }
+
+        await applySession(data.session);
+
+        initializedRef.current = true;
+
+        // If an auth event arrived during init, apply the latest session once.
+        const pending = pendingSessionRef.current;
+        if (pending !== data.session) {
+          await applySession(pending);
+        }
+
+        if (mounted) setLoading(false);
+      } catch (e) {
+        console.error("Error restoring session:", e);
+        if (!mounted) return;
         setUser(null);
-        return;
+        initializedRef.current = true;
+        setLoading(false);
       }
-      const role = await fetchUserRole(u.id);
-      setUser({ id: u.id, email: u.email || "", role });
-    });
+    })();
+
     return () => {
+      mounted = false;
       sub.subscription.unsubscribe();
     };
   }, []);

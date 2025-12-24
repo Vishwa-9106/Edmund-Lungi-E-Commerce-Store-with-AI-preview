@@ -72,6 +72,12 @@ export const supabase = missingEnv
       },
     })
   : createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: window.localStorage,
+      },
       global: {
         fetch: createInstrumentedFetch(),
       },
