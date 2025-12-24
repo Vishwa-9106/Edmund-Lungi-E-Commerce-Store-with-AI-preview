@@ -34,12 +34,12 @@ async function fetchUserRole(userId: string): Promise<Role> {
       .select('role')
       .eq('id', userId)
       .single();
-    
+
     if (error) {
       console.error('Error fetching user role:', error);
       return "customer";
     }
-    
+
     return (data.role as Role) || "customer";
   } catch (error) {
     console.error('Error fetching user role:', error);
@@ -107,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       const u = data.user;
       if (!u) return { ok: true as const }; // may need email verification
-      const role = roleFromMetadata(u);
+      const role = (u.user_metadata?.role as Role) || "customer";
       setUser({ id: u.id, email: u.email || "", role });
       return { ok: true as const };
     } catch (e: any) {
