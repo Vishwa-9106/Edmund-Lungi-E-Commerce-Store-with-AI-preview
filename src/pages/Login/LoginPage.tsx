@@ -51,10 +51,7 @@ export default function LoginPage() {
     setIsLoading(true);
     const result = await googleSignIn();
     setIsLoading(false);
-    if (result.ok) {
-      toast({ title: "Welcome!", description: "Logged in with Google." });
-      navigate("/home", { replace: true });
-    } else {
+    if (!result.ok) {
       const message = "error" in result ? result.error : "Google login failed";
       toast({ title: "Google login failed", description: message, variant: "destructive" });
     }

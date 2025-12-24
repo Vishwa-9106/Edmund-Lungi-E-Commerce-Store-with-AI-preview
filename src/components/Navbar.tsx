@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ShoppingBag, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,6 +19,7 @@ export function Navbar() {
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const { isAuthenticated, logout } = useAuth();
   const { totalItems } = useCart();
+  const navigate = useNavigate();
 
   const navLinks = [
     { name: "Home", href: "/" },
@@ -80,7 +81,8 @@ export function Navbar() {
                       <Button 
                         variant="default" 
                         onClick={() => {
-                          logout();
+                          navigate("/", { replace: true });
+                          void logout();
                           setIsLogoutDialogOpen(false);
                         }}
                       >

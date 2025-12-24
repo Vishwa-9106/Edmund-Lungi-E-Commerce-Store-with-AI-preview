@@ -62,10 +62,7 @@ export default function SignupPage() {
     setIsLoading(true);
     const result = await googleSignIn();
     setIsLoading(false);
-    if (result.ok) {
-      toast({ title: "Welcome!", description: "Signed up with Google." });
-      navigate("/home", { replace: true });
-    } else {
+    if (!result.ok) {
       toast({ title: "Google sign-in failed", description: result.error, variant: "destructive" });
     }
   };

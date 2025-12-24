@@ -8,8 +8,8 @@ export default function CustomerDashboard() {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
-    navigate("/");
+    navigate("/", { replace: true });
+    void logout();
   };
 
   const orders = [

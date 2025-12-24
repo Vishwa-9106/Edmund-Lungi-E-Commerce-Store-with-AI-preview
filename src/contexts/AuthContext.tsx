@@ -1,16 +1,19 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { supabase } from "@/supabase";
+import { toast } from "@/hooks/use-toast";
 
 type Role = "customer" | "admin" | "unknown";
 
 interface AppUser {
   id: string;
   email: string;
+  name?: string;
   role: Role;
 }
 
 interface AuthContextType {
   user: AppUser | null;
+  authLoading: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   signup: (
@@ -49,9 +52,10 @@ async function fetchUserRole(userId: string): Promise<Role> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
   const initializedRef = useRef(false);
   const pendingSessionRef = useRef<Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"] | null>(null);
+  const lastGoogleWelcomeToastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -64,7 +68,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const role = await fetchUserRole(session.user.id);
       if (!mounted) return;
-      setUser({ id: session.user.id, email: session.user.email || "", role });
+      setUser({
+        id: session.user.id,
+        email: session.user.email || "",
+        name: (session.user.user_metadata as any)?.name || (session.user.user_metadata as any)?.full_name || undefined,
+        role,
+      });
     };
 
     // Keep auth state in sync (login/logout/token refresh)
@@ -85,9 +94,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!initializedRef.current) return;
 
       try {
+        if (
+          _event === "SIGNED_IN" &&
+          session?.user?.id &&
+          (session.user.app_metadata as any)?.provider === "google" &&
+          lastGoogleWelcomeToastUserIdRef.current !== session.user.id
+        ) {
+          lastGoogleWelcomeToastUserIdRef.current = session.user.id;
+          toast({ title: "Welcome!", description: "Logged in with Google." });
+        }
+
         await applySession(session);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) setAuthLoading(false);
       }
     });
 
@@ -121,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error("Error restoring session:", error);
           setUser(null);
           initializedRef.current = true;
-          setLoading(false);
+          setAuthLoading(false);
           return;
         }
 
@@ -135,13 +154,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await applySession(pending);
         }
 
-        if (mounted) setLoading(false);
+        if (mounted) setAuthLoading(false);
       } catch (e) {
         console.error("Error restoring session:", e);
         if (!mounted) return;
         setUser(null);
         initializedRef.current = true;
-        setLoading(false);
+        setAuthLoading(false);
       }
     })();
 
@@ -158,7 +177,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = data.user;
       if (!u) return { ok: false as const, error: "Login failed" };
       const role = await fetchUserRole(u.id);
-      setUser({ id: u.id, email: u.email || "", role });
+      setUser({
+        id: u.id,
+        email: u.email || "",
+        name: (u.user_metadata as any)?.name || (u.user_metadata as any)?.full_name || undefined,
+        role,
+      });
       return { ok: true as const };
     } catch (e: any) {
       console.error(e);
@@ -180,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = data.user;
       if (!u) return { ok: true as const }; // may need email verification
       const role = (u.user_metadata?.role as Role) || "customer";
-      setUser({ id: u.id, email: u.email || "", role });
+      setUser({ id: u.id, email: u.email || "", name, role });
       return { ok: true as const };
     } catch (e: any) {
       console.error(e);
@@ -191,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const googleSignIn = async () => {
     try {
+      setAuthLoading(true);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: window.location.origin },
@@ -206,14 +231,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
     setUser(null);
+
+    void supabase.auth.signOut().catch((e) => {
+      console.error(e);
+    });
   };
 
   const value = useMemo(
     () => ({
       user,
-      loading,
+      authLoading,
+      loading: authLoading,
       login,
       signup,
       googleSignIn,
@@ -221,7 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: !!user,
       isAdmin: user?.role === "admin",
     }),
-    [user, loading]
+    [user, authLoading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
