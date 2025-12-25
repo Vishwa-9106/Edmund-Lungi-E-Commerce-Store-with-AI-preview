@@ -8,6 +8,7 @@ interface AppUser {
   id: string;
   email: string;
   name?: string;
+  createdAt?: string;
   role: Role;
 }
 
@@ -72,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: session.user.id,
         email: session.user.email || "",
         name: (session.user.user_metadata as any)?.name || (session.user.user_metadata as any)?.full_name || undefined,
+        createdAt: (session.user as any)?.created_at || undefined,
         role,
       });
     };
@@ -181,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: u.id,
         email: u.email || "",
         name: (u.user_metadata as any)?.name || (u.user_metadata as any)?.full_name || undefined,
+        createdAt: (u as any)?.created_at || undefined,
         role,
       });
       return { ok: true as const };
@@ -204,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = data.user;
       if (!u) return { ok: true as const }; // may need email verification
       const role = (u.user_metadata?.role as Role) || "customer";
-      setUser({ id: u.id, email: u.email || "", name, role });
+      setUser({ id: u.id, email: u.email || "", name, createdAt: (u as any)?.created_at || undefined, role });
       return { ok: true as const };
     } catch (e: any) {
       console.error(e);
