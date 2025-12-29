@@ -1,8 +1,20 @@
 import { useMemo, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/supabase";
 
 type AdminMenuItem =
   | "Dashboard"
@@ -24,6 +36,20 @@ export default function AdminPage() {
     ],
     []
   );
+
+  const navigate = useNavigate();
+  const [logoutBusy, setLogoutBusy] = useState(false);
+
+  const handleConfirmLogout = async () => {
+    if (logoutBusy) return;
+    setLogoutBusy(true);
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setLogoutBusy(false);
+      navigate("/", { replace: true });
+    }
+  };
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -78,6 +104,28 @@ export default function AdminPage() {
         <main className="flex-1">
           <Outlet />
         </main>
+      </div>
+
+      <div className="fixed bottom-4 left-4 z-50">
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button type="button" variant="outline" size="sm" disabled={logoutBusy}>
+              Logout
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmation</AlertDialogTitle>
+              <AlertDialogDescription>Are you sure you want to logout?</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>No</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmLogout} disabled={logoutBusy}>
+                Yes
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

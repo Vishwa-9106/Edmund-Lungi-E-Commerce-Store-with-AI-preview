@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,15 +13,8 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
-  const { login, googleSignIn, isAuthenticated, loading, user } = useAuth();
-  const navigate = useNavigate();
+  const { login, googleSignIn } = useAuth();
   const { toast } = useToast();
-
-  useEffect(() => {
-    if (!loading && isAuthenticated && user) {
-      navigate("/home", { replace: true });
-    }
-  }, [isAuthenticated, user, loading, navigate]);
 
   const validate = () => {
     const next: typeof errors = {};
@@ -40,7 +33,7 @@ export default function LoginPage() {
 
     if (result.ok) {
       toast({ title: "Welcome back!", description: "You have been logged in successfully." });
-      // Navigation will be handled by the useEffect above after the role is properly set
+      // Navigation is handled only after role is fetched and resolved.
     } else {
       const message = "error" in result ? result.error : "Please check your credentials and try again.";
       toast({ title: "Login failed", description: message, variant: "destructive" });

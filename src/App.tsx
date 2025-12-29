@@ -2,12 +2,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { MainLayout } from "@/layouts/MainLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { lazy, Suspense } from "react";
+import { AdminProtectedRoute } from "@/components/AdminProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
+import { lazy, Suspense, useEffect } from "react";
 
 // Lazy load pages for better performance
 const HomePage = lazy(() => import("@/pages/Home/HomePage"));
@@ -37,6 +39,79 @@ const LoadingSpinner = () => (
   </div>
 );
 
+const AdminRedirector = () => {
+  const { loading, isAuthenticated, role } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (loading) return;
+    if (!isAuthenticated) return;
+    if (role !== "admin") return;
+    if (location.pathname.startsWith("/admin")) return;
+    navigate("/admin", { replace: true });
+  }, [loading, isAuthenticated, role, location.pathname, navigate]);
+
+  return null;
+};
+
+const AppRoutes = () => {
+  const { loading } = useAuth();
+
+  if (loading) return <LoadingSpinner />;
+
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <AdminRedirector />
+      <Routes>
+        {/* Public Routes with MainLayout */}
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/shop" element={<ShopPage />} />
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/product/:id" element={<ProductDetailsPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/about-us" element={<AboutPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/faq" element={<FAQPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <CustomerDashboard />
+              </ProtectedRoute>
+            }
+          />
+        </Route>
+
+        {/* Auth Routes (no layout) */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+
+        {/* Admin Route (blank page, no layout) */}
+        <Route
+          path="/admin"
+          element={
+            <AdminProtectedRoute>
+              <AdminPage />
+            </AdminProtectedRoute>
+          }
+        >
+          <Route path="dashboard" element={<AdminDashboardPage />} />
+          <Route path="sales-analytics" element={<AdminSalesAnalyticsPage />} />
+          <Route path="orders" element={<AdminOrdersPage />} />
+          <Route path="products" element={<AdminProductsPage />} />
+          <Route path="customers" element={<AdminCustomersPage />} />
+          <Route path="marketing" element={<AdminMarketingPage />} />
+        </Route>
+
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -45,43 +120,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <Suspense fallback={<LoadingSpinner />}>
-              <Routes>
-                {/* Public Routes with MainLayout */}
-                <Route element={<MainLayout />}>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/shop" element={<ShopPage />} />
-                  <Route path="/home" element={<HomePage />} />
-                  <Route path="/product/:id" element={<ProductDetailsPage />} />
-                  <Route path="/about" element={<AboutPage />} />
-                  <Route path="/about-us" element={<AboutPage />} />
-                  <Route path="/contact" element={<ContactPage />} />
-                  <Route path="/cart" element={<CartPage />} />
-                  <Route path="/faq" element={<FAQPage />} />
-                  <Route path="/dashboard" element={
-                    <ProtectedRoute>
-                      <CustomerDashboard />
-                    </ProtectedRoute>
-                  } />
-                </Route>
-
-                {/* Auth Routes (no layout) */}
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/signup" element={<SignupPage />} />
-
-                {/* Admin Route (blank page, no layout) */}
-                <Route path="/admin" element={<AdminPage />}>
-                  <Route path="dashboard" element={<AdminDashboardPage />} />
-                  <Route path="sales-analytics" element={<AdminSalesAnalyticsPage />} />
-                  <Route path="orders" element={<AdminOrdersPage />} />
-                  <Route path="products" element={<AdminProductsPage />} />
-                  <Route path="customers" element={<AdminCustomersPage />} />
-                  <Route path="marketing" element={<AdminMarketingPage />} />
-                </Route>
-
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
+            <AppRoutes />
           </BrowserRouter>
         </TooltipProvider>
       </CartProvider>
