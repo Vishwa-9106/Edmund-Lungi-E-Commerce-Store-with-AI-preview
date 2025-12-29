@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Table,
   TableBody,
@@ -52,6 +53,7 @@ type ProductRow = {
 };
 
 export default function ProductsPage() {
+  const { isAdmin } = useAuth();
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +63,10 @@ export default function ProductsPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
+  const [modalMode, setModalMode] = useState<"add" | "edit">("add");
+  const [editingProduct, setEditingProduct] = useState<ProductRow | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [toggleBusyIds, setToggleBusyIds] = useState<Record<string, boolean>>({});
 
@@ -69,6 +75,9 @@ export default function ProductsPage() {
   const [formPrice, setFormPrice] = useState<string>("");
   const [formOriginalPrice, setFormOriginalPrice] = useState<string>("");
   const [formCategory, setFormCategory] = useState("");
+  const [formMaterial, setFormMaterial] = useState("");
+  const [formColor, setFormColor] = useState("");
+  const [formSizes, setFormSizes] = useState("");
   const [formStockQuantity, setFormStockQuantity] = useState<string>("0");
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formIsActive, setFormIsActive] = useState(true);
@@ -117,10 +126,157 @@ export default function ProductsPage() {
     setFormPrice("");
     setFormOriginalPrice("");
     setFormCategory("");
+    setFormMaterial("");
+    setFormColor("");
+    setFormSizes("");
     setFormStockQuantity("0");
     setFormImageUrl("");
     setFormIsActive(true);
     setAddError(null);
+  };
+
+  const openAddModal = () => {
+    setModalMode("add");
+    setEditingProduct(null);
+    resetAddForm();
+    setIsAddOpen(true);
+  };
+
+  const openEditModal = (product: ProductRow) => {
+    setModalMode("edit");
+    setEditingProduct(product);
+    setAddError(null);
+    setFormName(product.name ?? "");
+    setFormDescription(product.description ?? "");
+    setFormPrice(String(product.price ?? ""));
+    setFormOriginalPrice(product.original_price == null ? "" : String(product.original_price));
+    setFormCategory(product.category ?? "");
+    setFormMaterial(product.material ?? "");
+    setFormColor(product.color ?? "");
+    setFormSizes(product.sizes?.join(", ") ?? "");
+    setFormStockQuantity(String(product.stock_quantity ?? 0));
+    setFormImageUrl(product.image_url ?? "");
+    setFormIsActive(!!product.is_active);
+    setIsAddOpen(true);
+  };
+
+  const handleUpdateProduct = async () => {
+    if (!editingProduct) return;
+    setAddError(null);
+
+    const name = formName.trim();
+    const priceNumber = Number(formPrice);
+
+    if (!name) {
+      setAddError("Product Name is required");
+      return;
+    }
+
+    if (!Number.isFinite(priceNumber)) {
+      setAddError("Price is required");
+      return;
+    }
+
+    const stockNumber = formStockQuantity.trim() === "" ? 0 : Number(formStockQuantity);
+    const originalPriceNumber = formOriginalPrice.trim() === "" ? null : Number(formOriginalPrice);
+    const material = formMaterial.trim() === "" ? null : formMaterial.trim();
+    const color = formColor.trim() === "" ? null : formColor.trim();
+    const sizes =
+      formSizes.trim() === ""
+        ? null
+        : formSizes
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+
+    if (!Number.isFinite(stockNumber)) {
+      setAddError("Stock Quantity must be a number");
+      return;
+    }
+
+    if (originalPriceNumber !== null && !Number.isFinite(originalPriceNumber)) {
+      setAddError("Original Price must be a number");
+      return;
+    }
+
+    const nextDescription = formDescription.trim() === "" ? null : formDescription;
+    const nextCategory = formCategory.trim() === "" ? null : formCategory;
+    const nextImageUrl = formImageUrl.trim() === "" ? null : formImageUrl;
+    const nextIsActive = formIsActive;
+
+    type ProductUpdatePayload = {
+      name?: string;
+      description?: string | null;
+      price?: number;
+      original_price?: number | null;
+      category?: string | null;
+      material?: string | null;
+      color?: string | null;
+      sizes?: string[] | null;
+      stock_quantity?: number;
+      image_url?: string | null;
+      is_active?: boolean;
+    };
+
+    const updatePayload: ProductUpdatePayload = {};
+
+    if (name !== (editingProduct.name ?? "")) updatePayload.name = name;
+    if (nextDescription !== editingProduct.description) updatePayload.description = nextDescription;
+    if (priceNumber !== editingProduct.price) updatePayload.price = priceNumber;
+    if (originalPriceNumber !== editingProduct.original_price) updatePayload.original_price = originalPriceNumber;
+    if (nextCategory !== editingProduct.category) updatePayload.category = nextCategory;
+    if (material !== editingProduct.material) updatePayload.material = material;
+    if (color !== editingProduct.color) updatePayload.color = color;
+    if ((sizes ?? null)?.join("\u0000") !== (editingProduct.sizes ?? null)?.join("\u0000")) updatePayload.sizes = sizes;
+    if (stockNumber !== editingProduct.stock_quantity) updatePayload.stock_quantity = stockNumber;
+    if (nextImageUrl !== editingProduct.image_url) updatePayload.image_url = nextImageUrl;
+    if (nextIsActive !== editingProduct.is_active) updatePayload.is_active = nextIsActive;
+
+    if (Object.keys(updatePayload).length === 0) {
+      setIsAddOpen(false);
+      resetAddForm();
+      setEditingProduct(null);
+      setModalMode("add");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        setAddError(sessionError.message || "Failed to validate session");
+        return;
+      }
+
+      if (!sessionData.session?.access_token) {
+        setAddError("You must be logged in to update products");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("products")
+        .update(updatePayload)
+        .eq("id", editingProduct.id)
+        .select("*")
+        .single();
+
+      if (error || !data) {
+        setAddError(error?.message || "Failed to update product");
+        return;
+      }
+
+      const updated = data as ProductRow;
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setIsAddOpen(false);
+      resetAddForm();
+      setEditingProduct(null);
+      setModalMode("add");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to update product";
+      setAddError(msg);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleAddProduct = async () => {
@@ -141,6 +297,15 @@ export default function ProductsPage() {
 
     const stockNumber = formStockQuantity.trim() === "" ? 0 : Number(formStockQuantity);
     const originalPriceNumber = formOriginalPrice.trim() === "" ? null : Number(formOriginalPrice);
+    const material = formMaterial.trim() === "" ? null : formMaterial.trim();
+    const color = formColor.trim() === "" ? null : formColor.trim();
+    const sizes =
+      formSizes.trim() === ""
+        ? null
+        : formSizes
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
 
     if (!Number.isFinite(stockNumber)) {
       setAddError("Stock Quantity must be a number");
@@ -165,18 +330,38 @@ export default function ProductsPage() {
         return;
       }
 
+      type ProductInsertPayload = {
+        name: string;
+        description: string | null;
+        price: number;
+        original_price: number | null;
+        category: string | null;
+        stock_quantity: number;
+        image_url: string | null;
+        is_active: boolean;
+        material?: string;
+        color?: string;
+        sizes?: string[];
+      };
+
+      const insertPayload: ProductInsertPayload = {
+        name,
+        description: formDescription.trim() === "" ? null : formDescription,
+        price: priceNumber,
+        original_price: originalPriceNumber,
+        category: formCategory.trim() === "" ? null : formCategory,
+        stock_quantity: stockNumber,
+        image_url: formImageUrl.trim() === "" ? null : formImageUrl,
+        is_active: formIsActive,
+      };
+
+      if (material !== null) insertPayload.material = material;
+      if (color !== null) insertPayload.color = color;
+      if (sizes !== null) insertPayload.sizes = sizes;
+
       const { data, error } = await supabase
         .from("products")
-        .insert({
-          name,
-          description: formDescription.trim() === "" ? null : formDescription,
-          price: priceNumber,
-          original_price: originalPriceNumber,
-          category: formCategory.trim() === "" ? null : formCategory,
-          stock_quantity: stockNumber,
-          image_url: formImageUrl.trim() === "" ? null : formImageUrl,
-          is_active: formIsActive,
-        })
+        .insert(insertPayload)
         .select("*")
         .single();
 
@@ -248,10 +433,7 @@ export default function ProductsPage() {
             <div className="flex items-center justify-end pb-4">
               <Button
                 type="button"
-                onClick={() => {
-                  resetAddForm();
-                  setIsAddOpen(true);
-                }}
+                onClick={openAddModal}
               >
                 Add Product
               </Button>
@@ -312,17 +494,31 @@ export default function ProductsPage() {
 
                           <div className="mt-4 flex justify-end">
                             <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="sm"
-                                  className="w-full"
-                                  disabled={deleteBusyId === p.id}
-                                >
-                                  Delete
-                                </Button>
-                              </AlertDialogTrigger>
+                              <div className="flex w-full flex-col gap-2">
+                                {isAdmin ? (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={() => openEditModal(p)}
+                                    disabled={isAdding || isUpdating}
+                                  >
+                                    Edit
+                                  </Button>
+                                ) : null}
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    className="w-full"
+                                    disabled={deleteBusyId === p.id}
+                                  >
+                                    Delete
+                                  </Button>
+                                </AlertDialogTrigger>
+                              </div>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Delete Product</AlertDialogTitle>
@@ -437,18 +633,32 @@ export default function ProductsPage() {
                                   </TableCell>
                                   <TableCell className="max-w-[220px] truncate p-2 lg:p-4">{p.created_at}</TableCell>
                                   <TableCell className="p-2 lg:p-4 text-right">
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
+                                    <div className="flex items-center justify-end gap-2">
+                                      {isAdmin ? (
                                         <Button
                                           type="button"
-                                          variant="destructive"
+                                          variant="outline"
                                           size="sm"
                                           className="max-w-full whitespace-nowrap"
-                                          disabled={deleteBusyId === p.id}
+                                          onClick={() => openEditModal(p)}
+                                          disabled={isAdding || isUpdating}
                                         >
-                                          Delete
+                                          Edit
                                         </Button>
-                                      </AlertDialogTrigger>
+                                      ) : null}
+
+                                      <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                          <Button
+                                            type="button"
+                                            variant="destructive"
+                                            size="sm"
+                                            className="max-w-full whitespace-nowrap"
+                                            disabled={deleteBusyId === p.id}
+                                          >
+                                            Delete
+                                          </Button>
+                                        </AlertDialogTrigger>
                                       <AlertDialogContent>
                                         <AlertDialogHeader>
                                           <AlertDialogTitle>Delete Product</AlertDialogTitle>
@@ -466,7 +676,8 @@ export default function ProductsPage() {
                                           </AlertDialogAction>
                                         </AlertDialogFooter>
                                       </AlertDialogContent>
-                                    </AlertDialog>
+                                      </AlertDialog>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -484,13 +695,21 @@ export default function ProductsPage() {
               open={isAddOpen}
               onOpenChange={(open) => {
                 setIsAddOpen(open);
-                if (!open) resetAddForm();
+                if (!open) {
+                  resetAddForm();
+                  setEditingProduct(null);
+                  setModalMode("add");
+                }
               }}
             >
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Add Product</DialogTitle>
-                  <DialogDescription>Fill in the details below to create a new product.</DialogDescription>
+                  <DialogTitle>{modalMode === "add" ? "Add Product" : "Update Product"}</DialogTitle>
+                  <DialogDescription>
+                    {modalMode === "add"
+                      ? "Fill in the details below to create a new product."
+                      : "Update the details below to modify this product."}
+                  </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-4">
@@ -557,6 +776,38 @@ export default function ProductsPage() {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="product-material">Material</Label>
+                      <Input
+                        id="product-material"
+                        value={formMaterial}
+                        onChange={(e) => setFormMaterial(e.target.value)}
+                        placeholder="e.g. Cotton"
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="product-color">Color</Label>
+                      <Input
+                        id="product-color"
+                        value={formColor}
+                        onChange={(e) => setFormColor(e.target.value)}
+                        placeholder="e.g. Black"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="product-sizes">Sizes</Label>
+                    <Input
+                      id="product-sizes"
+                      value={formSizes}
+                      onChange={(e) => setFormSizes(e.target.value)}
+                      placeholder="e.g. Free Size, Large, XL"
+                    />
+                  </div>
+
                   <div className="grid gap-2">
                     <Label htmlFor="product-image-url">Image URL</Label>
                     <Input
@@ -581,14 +832,22 @@ export default function ProductsPage() {
                     onClick={() => {
                       setIsAddOpen(false);
                       resetAddForm();
+                      setEditingProduct(null);
+                      setModalMode("add");
                     }}
-                    disabled={isAdding}
+                    disabled={isAdding || isUpdating}
                   >
                     Cancel
                   </Button>
-                  <Button type="button" onClick={handleAddProduct} disabled={isAdding}>
-                    {isAdding ? "Adding..." : "Add"}
-                  </Button>
+                  {modalMode === "add" ? (
+                    <Button type="button" onClick={handleAddProduct} disabled={isAdding || isUpdating}>
+                      {isAdding ? "Adding..." : "Add"}
+                    </Button>
+                  ) : (
+                    <Button type="button" onClick={handleUpdateProduct} disabled={isAdding || isUpdating}>
+                      {isUpdating ? "Updating..." : "Update"}
+                    </Button>
+                  )}
                 </DialogFooter>
               </DialogContent>
             </Dialog>
