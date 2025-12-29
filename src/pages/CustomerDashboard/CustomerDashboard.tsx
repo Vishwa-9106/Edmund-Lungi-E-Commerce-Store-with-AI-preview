@@ -344,7 +344,7 @@ export default function CustomerDashboard() {
     const raw = selectedOrder?.items;
     if (!Array.isArray(raw)) return [] as OrderItem[];
     return (raw as any[])
-      .filter((x) => x && typeof x === "object")
+      .filter((x) => x && typeof x === "object" && !(x as any)._metadata)
       .map((x) => ({
         name: String((x as any).name ?? ""),
         qty: Number((x as any).qty ?? 0),
