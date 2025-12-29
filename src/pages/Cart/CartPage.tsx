@@ -1,10 +1,21 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Trash2, Plus, Minus, ShoppingBag, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/contexts/CartContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const CartPage = () => {
   const { items, removeFromCart, updateQuantity, totalPrice, totalItems } = useCart();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  const handleCheckout = () => {
+    if (!isAuthenticated) {
+      navigate("/login?redirect=/checkout");
+      return;
+    }
+    navigate("/checkout");
+  };
 
   if (items.length === 0) {
     return (
@@ -97,9 +108,12 @@ const CartPage = () => {
                   </div>
                 </div>
               </div>
-              <Button className="w-full btn-primary mt-6">
-                Proceed to Checkout
-              </Button>
+                <Button 
+                  className="w-full btn-primary mt-6"
+                  onClick={handleCheckout}
+                >
+                  Proceed to Checkout
+                </Button>
               <Link to="/shop" className="block mt-4">
                 <Button variant="outline" className="w-full">
                   Continue Shopping
