@@ -31,12 +31,13 @@ export default function CustomersPage() {
     setLoading(true);
 
     (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("users")
-          .select("id, name, email, mobile, role, created_at");
+        try {
+          const { data, error } = await supabase
+            .from("users")
+            .select("id, name, email, mobile, role, created_at")
+            .eq("role", "user");
 
-        if (!alive) return;
+          if (!alive) return;
 
         if (error) {
           setUsers([]);
@@ -66,9 +67,9 @@ export default function CustomersPage() {
           <div className="p-4">
             {loading ? (
               <div className="text-sm text-muted-foreground">Loading...</div>
-            ) : users.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No users found</div>
-            ) : (
+              ) : users.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No customers found</div>
+              ) : (
               <div className="w-full overflow-x-auto">
                 <Table>
                   <TableHeader>
