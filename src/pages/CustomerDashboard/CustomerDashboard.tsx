@@ -731,8 +731,27 @@ export default function CustomerDashboard() {
                             <p className="text-sm font-medium mb-1">Payment Method</p>
                             <p className="text-sm text-muted-foreground">{paymentMethod === "COD" ? "Cash on Delivery" : paymentMethod}</p>
                           </div>
+                        </div>
+                      )}
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              ) : activeKey === "addresses" ? (
+                <div className="space-y-8">
+                  <div>
+                    <h1 className="section-title">My Addresses</h1>
+                    <p className="text-muted-foreground mt-3 max-w-xl">
+                      Manage your shipping addresses for a faster checkout experience.
+                    </p>
+                  </div>
 
-                {isAddressFormOpen && (
+                  <div className="flex justify-end">
+                    <Button type="button" className="btn-primary" onClick={openAddAddress}>
+                      Add New Address
+                    </Button>
+                  </div>
+
+                  {isAddressFormOpen && (
                   <div className="card-elevated p-6">
                     <h2 className="font-semibold text-xl">
                       {editingAddressId ? "Edit Address" : "Add Address"}
