@@ -353,6 +353,20 @@ export default function CustomerDashboard() {
       .filter((x) => x.name.length > 0);
   }, [selectedOrder?.items]);
 
+  const deliveryAddress = useMemo(() => {
+    const raw = selectedOrder?.items;
+    if (!Array.isArray(raw)) return null;
+    const meta = (raw as any[]).find((x) => x?._metadata && x?.type === "delivery_address");
+    return meta?.address || null;
+  }, [selectedOrder?.items]);
+
+  const paymentMethod = useMemo(() => {
+    const raw = selectedOrder?.items;
+    if (!Array.isArray(raw)) return null;
+    const meta = (raw as any[]).find((x) => x?._metadata && x?.type === "payment_info");
+    return meta?.method || "COD";
+  }, [selectedOrder?.items]);
+
   const trackingSteps = useMemo(
     () => [
       { key: "placed", label: "Placed" },
@@ -683,64 +697,40 @@ export default function CustomerDashboard() {
                           </div>
                         </div>
 
-                        {normalizedItems.length > 0 ? (
-                          <div className="space-y-3">
-                            <p className="text-sm font-medium">Items</p>
-                            <div className="space-y-2">
-                              {normalizedItems.map((it, idx) => (
-                                <div key={`${it.name}-${idx}`} className="flex items-center justify-between bg-secondary/50 rounded-xl p-3">
-                                  <div>
-                                    <p className="font-medium">{it.name}</p>
-                                    <p className="text-sm text-muted-foreground">Qty: {it.qty}</p>
+                          {normalizedItems.length > 0 ? (
+                            <div className="space-y-3">
+                              <p className="text-sm font-medium">Items</p>
+                              <div className="space-y-2">
+                                {normalizedItems.map((it, idx) => (
+                                  <div key={`${it.name}-${idx}`} className="flex items-center justify-between bg-secondary/50 rounded-xl p-3">
+                                    <div>
+                                      <p className="font-medium">{it.name}</p>
+                                      <p className="text-sm text-muted-foreground">Qty: {it.qty}</p>
+                                    </div>
+                                    <p className="font-semibold">{orderTotalLabel(it.price * it.qty, selectedOrder.currency)}</p>
                                   </div>
-                                  <p className="font-semibold">{orderTotalLabel(it.price * it.qty, selectedOrder.currency)}</p>
-                                </div>
-                              ))}
+                                ))}
+                              </div>
                             </div>
+                          ) : null}
+
+                          {deliveryAddress && (
+                            <div className="bg-secondary/30 rounded-xl p-4 border border-border">
+                              <p className="text-sm font-medium mb-2">Delivery Address</p>
+                              <div className="text-sm text-muted-foreground space-y-1">
+                                <p className="font-semibold text-foreground">{deliveryAddress.fullName}</p>
+                                <p>{deliveryAddress.line1}</p>
+                                {deliveryAddress.line2 && <p>{deliveryAddress.line2}</p>}
+                                <p>{deliveryAddress.city}, {deliveryAddress.state} - {deliveryAddress.postalCode}</p>
+                                <p>Phone: {deliveryAddress.phone}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="bg-secondary/30 rounded-xl p-4 border border-border">
+                            <p className="text-sm font-medium mb-1">Payment Method</p>
+                            <p className="text-sm text-muted-foreground">{paymentMethod === "COD" ? "Cash on Delivery" : paymentMethod}</p>
                           </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">No item details available for this order.</p>
-                        )}
-                      </div>
-                    )}
-
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button variant="outline">Close</Button>
-                      </DialogClose>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            ) : activeKey === "addresses" ? (
-              <div className="space-y-8">
-                <div className="flex items-start justify-between gap-6 flex-wrap">
-                  <div>
-                    <h1 className="section-title">Addresses</h1>
-                    <p className="text-muted-foreground mt-3 max-w-xl">
-                      Add, edit, or remove your saved addresses.
-                    </p>
-                  </div>
-                  <Button type="button" className="btn-primary" onClick={openAddAddress} disabled={addressesLoading || addressesSaving}>
-                    Add Address
-                  </Button>
-                </div>
-
-                {addressesError && (
-                  <div className="card-elevated p-6">
-                    <p className="text-sm text-destructive">{addressesError}</p>
-                  </div>
-                )}
-
-                {addressesLoading ? (
-                  <div className="card-elevated p-6">
-                    <div className="space-y-4">
-                      <Skeleton className="h-6 w-40" />
-                      <Skeleton className="h-4 w-72" />
-                      <Skeleton className="h-4 w-56" />
-                    </div>
-                  </div>
-                ) : null}
 
                 {isAddressFormOpen && (
                   <div className="card-elevated p-6">

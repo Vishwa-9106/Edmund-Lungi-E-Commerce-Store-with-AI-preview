@@ -127,33 +127,37 @@ export default function CheckoutPage() {
     const address = addresses.find((a) => a.id === selectedAddressId);
     if (!address) return;
 
-      try {
-        setIsPlacingOrder(true);
+        try {
+          setIsPlacingOrder(true);
 
-        const orderData = {
-          user_id: user.id,
-          order_number: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          items: [
-            ...items.map((item) => ({
-              name: item.product.name,
-              qty: item.quantity,
-              price: item.product.price,
-              size: item.size,
-            })),
-            {
-              _metadata: true,
-              type: "delivery_address",
-              address: address
-            }
-          ],
-          total: totalPrice,
-          currency: "INR",
-          status: "placed",
-          payment_method: "COD",
-          created_at: new Date().toISOString(),
-        };
+          const orderData = {
+            user_id: user.id,
+            order_number: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            items: [
+              ...items.map((item) => ({
+                name: item.product.name,
+                qty: item.quantity,
+                price: item.product.price,
+                size: item.size,
+              })),
+              {
+                _metadata: true,
+                type: "delivery_address",
+                address: address
+              },
+              {
+                _metadata: true,
+                type: "payment_info",
+                method: "COD"
+              }
+            ],
+            total: totalPrice,
+            currency: "INR",
+            status: "placed",
+            created_at: new Date().toISOString(),
+          };
 
-        const { error } = await supabase.from("orders").insert(orderData);
+          const { error } = await supabase.from("orders").insert(orderData);
 
       if (error) throw error;
 
