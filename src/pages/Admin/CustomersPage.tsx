@@ -9,18 +9,18 @@ import {
 } from "@/components/ui/table";
 import { supabase } from "@/supabase";
 
-type CustomerRow = {
+type UserRow = {
   id: string;
-  email?: string | null;
-  created_at?: string | null;
-  name?: string | null;
-  mobile?: string | null;
+  name: string | null;
+  email: string | null;
+  mobile: string | null;
+  role: string | null;
+  created_at: string | null;
 };
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const didFetchRef = useRef(false);
 
   useEffect(() => {
@@ -29,30 +29,25 @@ export default function CustomersPage() {
     didFetchRef.current = true;
 
     setLoading(true);
-    setError(null);
 
     (async () => {
       try {
         const { data, error } = await supabase
           .from("users")
-          .select("id,name,email,mobile,created_at")
-          .eq("role", "user");
+          .select("id, name, email, mobile, role, created_at");
 
         if (!alive) return;
 
         if (error) {
-          setError(null);
-          setCustomers([]);
+          setUsers([]);
           return;
         }
 
-        const rows = Array.isArray(data) ? (data as CustomerRow[]) : [];
-        setError(null);
-        setCustomers(rows);
+        const rows = Array.isArray(data) ? (data as UserRow[]) : [];
+        setUsers(rows);
       } catch (e: any) {
         if (!alive) return;
-        setError(null);
-        setCustomers([]);
+        setUsers([]);
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -71,31 +66,43 @@ export default function CustomersPage() {
           <div className="p-4">
             {loading ? (
               <div className="text-sm text-muted-foreground">Loading...</div>
-            ) : customers.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No customers found</div>
+            ) : users.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No users found</div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Mobile</TableHead>
-                    <TableHead>Created At</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {customers.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell className="max-w-[220px] truncate">{c.id}</TableCell>
-                      <TableCell className="max-w-[260px] truncate">{c.email ?? ""}</TableCell>
-                      <TableCell className="max-w-[220px] truncate">{c.name ?? ""}</TableCell>
-                      <TableCell className="max-w-[180px] truncate">{c.mobile ?? ""}</TableCell>
-                      <TableCell className="max-w-[220px] truncate">{c.created_at ?? ""}</TableCell>
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Mobile</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Created At</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((u) => (
+                      <TableRow key={u.id}>
+                        <TableCell className="max-w-[200px] truncate">
+                          {u.name ?? ""}
+                        </TableCell>
+                        <TableCell className="max-w-[250px] truncate">
+                          {u.email ?? ""}
+                        </TableCell>
+                        <TableCell className="max-w-[150px] truncate">
+                          {u.mobile ?? ""}
+                        </TableCell>
+                        <TableCell className="max-w-[100px] truncate">
+                          {u.role ?? ""}
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate">
+                          {u.created_at ?? ""}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </div>
         </div>
