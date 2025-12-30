@@ -9,19 +9,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type CustomerRow = {
+type UserRow = {
   id: string;
   name: string | null;
   email: string | null;
   mobile: string | null;
-  addresses: Record<string, unknown>;
-  no_of_orders: number;
+  addresses: unknown;
+  no_of_orders: number | null;
 };
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const didFetchRef = useRef(false);
 
   useEffect(() => {
@@ -30,7 +29,6 @@ export default function CustomersPage() {
     didFetchRef.current = true;
 
     setLoading(true);
-    setError(null);
 
     (async () => {
       try {
@@ -43,17 +41,15 @@ export default function CustomersPage() {
 
         if (!alive) return;
         if (error) {
-          setError(error.message || "Failed to load customers");
-          setCustomers([]);
+          setUsers([]);
           return;
         }
 
-        const rows = Array.isArray(data) ? (data as CustomerRow[]) : [];
-        setCustomers(rows);
-      } catch (e: any) {
+        const rows = Array.isArray(data) ? (data as UserRow[]) : [];
+        setUsers(rows);
+      } catch {
         if (!alive) return;
-        setError(e?.message || "Failed to load customers");
-        setCustomers([]);
+        setUsers([]);
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -65,6 +61,35 @@ export default function CustomersPage() {
     };
   }, []);
 
+  const formatAddress = (addresses: unknown): string => {
+    if (!addresses) return "";
+    if (Array.isArray(addresses) && addresses.length > 0) {
+      const addr = addresses[0];
+      if (typeof addr === "object" && addr !== null) {
+        const parts: string[] = [];
+        const a = addr as Record<string, unknown>;
+        if (a.street) parts.push(String(a.street));
+        if (a.city) parts.push(String(a.city));
+        if (a.state) parts.push(String(a.state));
+        if (a.zip) parts.push(String(a.zip));
+        if (a.country) parts.push(String(a.country));
+        return parts.join(", ");
+      }
+      return String(addr);
+    }
+    if (typeof addresses === "object" && addresses !== null) {
+      const a = addresses as Record<string, unknown>;
+      const parts: string[] = [];
+      if (a.street) parts.push(String(a.street));
+      if (a.city) parts.push(String(a.city));
+      if (a.state) parts.push(String(a.state));
+      if (a.zip) parts.push(String(a.zip));
+      if (a.country) parts.push(String(a.country));
+      return parts.join(", ");
+    }
+    return String(addresses);
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden">
       <div className="container mx-auto px-4 py-6">
@@ -72,70 +97,64 @@ export default function CustomersPage() {
           <div className="p-4">
             {loading ? (
               <div className="text-sm text-muted-foreground">Loading...</div>
+            ) : users.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No customers found</div>
             ) : (
               <>
-                {error ? <div className="pb-4 text-sm text-destructive">{error}</div> : null}
-
-                {customers.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No customers found</div>
-                ) : (
-                  <>
-                    <div className="grid gap-3 md:hidden">
-                      {customers.map((c) => (
-                        <div key={c.id} className="rounded-xl border bg-background p-4 shadow-sm">
-                          <div className="font-medium truncate">{c.name ?? ""}</div>
-                          <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                            <div className="min-w-0">
-                              <div className="text-muted-foreground">Email</div>
-                              <div className="truncate">{c.email ?? ""}</div>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-muted-foreground">Phone</div>
-                              <div className="truncate">{c.mobile ?? ""}</div>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-muted-foreground">Address</div>
-                              <div className="truncate">{JSON.stringify(c.addresses)}</div>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-muted-foreground">No. of Orders</div>
-                              <div className="truncate">{c.no_of_orders}</div>
-                            </div>
-                          </div>
+                <div className="grid gap-3 md:hidden">
+                  {users.map((u) => (
+                    <div key={u.id} className="rounded-xl border bg-background p-4 shadow-sm">
+                      <div className="font-medium truncate">{u.name ?? ""}</div>
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                        <div className="min-w-0">
+                          <div className="text-muted-foreground">Email</div>
+                          <div className="truncate">{u.email ?? ""}</div>
                         </div>
-                      ))}
-                    </div>
-
-                    <div className="hidden md:block">
-                      <div className="w-full overflow-x-auto overscroll-x-contain [scrollbar-gutter:stable]">
-                        <div className="min-w-max">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="p-2 lg:p-4">Name</TableHead>
-                                <TableHead className="p-2 lg:p-4">Email</TableHead>
-                                <TableHead className="p-2 lg:p-4">Phone</TableHead>
-                                <TableHead className="p-2 lg:p-4">Address</TableHead>
-                                <TableHead className="p-2 lg:p-4">No. of Orders</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {customers.map((c) => (
-                                <TableRow key={c.id}>
-                                  <TableCell className="max-w-[220px] truncate p-2 lg:p-4">{c.name ?? ""}</TableCell>
-                                  <TableCell className="max-w-[220px] truncate p-2 lg:p-4">{c.email ?? ""}</TableCell>
-                                  <TableCell className="p-2 lg:p-4">{c.mobile ?? ""}</TableCell>
-                                  <TableCell className="max-w-[320px] truncate p-2 lg:p-4">{JSON.stringify(c.addresses)}</TableCell>
-                                  <TableCell className="p-2 lg:p-4">{c.no_of_orders}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
+                        <div className="min-w-0">
+                          <div className="text-muted-foreground">Phone</div>
+                          <div className="truncate">{u.mobile ?? ""}</div>
+                        </div>
+                        <div className="min-w-0 col-span-2">
+                          <div className="text-muted-foreground">Address</div>
+                          <div className="truncate">{formatAddress(u.addresses)}</div>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-muted-foreground">No. of Orders</div>
+                          <div className="truncate">{u.no_of_orders ?? 0}</div>
                         </div>
                       </div>
                     </div>
-                  </>
-                )}
+                  ))}
+                </div>
+
+                <div className="hidden md:block">
+                  <div className="w-full overflow-x-auto overscroll-x-contain [scrollbar-gutter:stable]">
+                    <div className="min-w-max">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="p-2 lg:p-4">Name</TableHead>
+                            <TableHead className="p-2 lg:p-4">Email</TableHead>
+                            <TableHead className="p-2 lg:p-4">Phone</TableHead>
+                            <TableHead className="p-2 lg:p-4">Address</TableHead>
+                            <TableHead className="p-2 lg:p-4">No. of Orders</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {users.map((u) => (
+                            <TableRow key={u.id}>
+                              <TableCell className="max-w-[220px] truncate p-2 lg:p-4">{u.name ?? ""}</TableCell>
+                              <TableCell className="max-w-[220px] truncate p-2 lg:p-4">{u.email ?? ""}</TableCell>
+                              <TableCell className="p-2 lg:p-4">{u.mobile ?? ""}</TableCell>
+                              <TableCell className="max-w-[320px] truncate p-2 lg:p-4">{formatAddress(u.addresses)}</TableCell>
+                              <TableCell className="p-2 lg:p-4">{u.no_of_orders ?? 0}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
               </>
             )}
           </div>
