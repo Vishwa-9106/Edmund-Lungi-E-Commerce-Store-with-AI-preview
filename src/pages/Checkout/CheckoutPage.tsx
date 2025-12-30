@@ -10,14 +10,13 @@ import { ShoppingBag, MapPin, CreditCard, ChevronRight, Loader2 } from "lucide-r
 
 type Address = {
   id: string;
-  fullName: string;
-  phone: string;
-  line1: string;
-  line2: string;
+  full_name: string;
+  mobile: string;
+  address_line: string;
   city: string;
   state: string;
-  postalCode: string;
-  country: string;
+  pincode: string;
+  created_at: string;
 };
 
 export default function CheckoutPage() {
@@ -29,18 +28,17 @@ export default function CheckoutPage() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [addressLoading, setAddressLoading] = useState(true);
 
-  const [addressForm, setAddressForm] = useState<Omit<Address, "id">>({
-    fullName: "",
-    phone: "",
-    line1: "",
-    line2: "",
+  const [addressForm, setAddressForm] = useState({
+    full_name: "",
+    mobile: "",
+    address_line: "",
     city: "",
     state: "",
-    postalCode: "",
-    country: "India",
+    pincode: "",
   });
 
   useEffect(() => {
@@ -60,14 +58,18 @@ export default function CheckoutPage() {
 
       if (error) throw error;
 
-      const raw = (data as any)?.addresses;
-      const list: Address[] = Array.isArray(raw) ? (raw as Address[]) : [];
+      const raw = data?.addresses;
+      let list: Address[] = [];
+      if (Array.isArray(raw)) {
+        list = raw as Address[];
+      } else if (raw && typeof raw === "object") {
+        list = [];
+      }
       setAddresses(list);
       if (list.length > 0) {
         setSelectedAddressId(list[0].id);
       }
     } catch (error: any) {
-      console.error("Error fetching addresses:", error);
       toast({
         title: "Error",
         description: "Failed to load saved addresses.",
@@ -82,34 +84,71 @@ export default function CheckoutPage() {
     e.preventDefault();
     if (!user?.id) return;
 
+    if (!addressForm.full_name || !addressForm.mobile || !addressForm.address_line || !addressForm.city || !addressForm.state || !addressForm.pincode) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSavingAddress(true);
+
     try {
+      const { data: userData, error: fetchError } = await supabase
+        .from("users")
+        .select("addresses")
+        .eq("id", user.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const currentAddresses = Array.isArray(userData?.addresses) ? userData.addresses : [];
+
       const newAddress: Address = {
         id: crypto.randomUUID(),
-        ...addressForm,
+        full_name: addressForm.full_name,
+        mobile: addressForm.mobile,
+        address_line: addressForm.address_line,
+        city: addressForm.city,
+        state: addressForm.state,
+        pincode: addressForm.pincode,
+        created_at: new Date().toISOString(),
       };
 
-      const updatedAddresses = [...addresses, newAddress];
-      
-      const { error } = await supabase
+      const updatedAddresses = [...currentAddresses, newAddress];
+
+      const { error: updateError } = await supabase
         .from("users")
         .update({ addresses: updatedAddresses })
         .eq("id", user.id);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
-      setAddresses(updatedAddresses);
+      await fetchAddresses();
       setSelectedAddressId(newAddress.id);
       setIsAddingAddress(false);
+      setAddressForm({
+        full_name: "",
+        mobile: "",
+        address_line: "",
+        city: "",
+        state: "",
+        pincode: "",
+      });
       toast({
         title: "Success",
-        description: "Address added successfully.",
+        description: "Address saved successfully.",
       });
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to add address.",
+        description: error.message || "Failed to save address.",
         variant: "destructive",
       });
+    } finally {
+      setIsSavingAddress(false);
     }
   };
 
@@ -218,105 +257,112 @@ export default function CheckoutPage() {
                 <div className="flex justify-center py-4">
                   <Loader2 className="w-6 h-6 animate-spin" />
                 </div>
-              ) : addresses.length > 0 && !isAddingAddress ? (
-                <div className="space-y-4">
-                  <div className="grid gap-4">
-                    {addresses.map((addr) => (
-                      <div
-                        key={addr.id}
-                        onClick={() => setSelectedAddressId(addr.id)}
-                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                          selectedAddressId === addr.id
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50"
-                        }`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold">{addr.fullName}</p>
-                            <p className="text-sm text-muted-foreground">{addr.phone}</p>
-                            <p className="text-sm mt-1">{addr.line1}</p>
-                            {addr.line2 && <p className="text-sm">{addr.line2}</p>}
-                            <p className="text-sm">
-                              {addr.city}, {addr.state} - {addr.postalCode}
-                            </p>
-                          </div>
-                          {selectedAddressId === addr.id && (
-                            <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                              <div className="w-2 h-2 bg-white rounded-full" />
+                ) : addresses.length > 0 && !isAddingAddress ? (
+                  <div className="space-y-4">
+                    <div className="grid gap-4">
+                      {addresses.map((addr) => (
+                        <div
+                          key={addr.id}
+                          onClick={() => setSelectedAddressId(addr.id)}
+                          className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                            selectedAddressId === addr.id
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/50"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-semibold">{addr.full_name}</p>
+                              <p className="text-sm text-muted-foreground">{addr.mobile}</p>
+                              <p className="text-sm mt-1">{addr.address_line}</p>
+                              <p className="text-sm">
+                                {addr.city}, {addr.state} - {addr.pincode}
+                              </p>
                             </div>
-                          )}
+                            {selectedAddressId === addr.id && (
+                              <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                                <div className="w-2 h-2 bg-white rounded-full" />
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setIsAddingAddress(true)}
-                  >
-                    Add New Address
-                  </Button>
-                </div>
-              ) : (
-                <form onSubmit={handleAddAddress} className="space-y-4">
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <InputField
-                      label="Full Name"
-                      value={addressForm.fullName}
-                      onChange={(e) => setAddressForm({ ...addressForm, fullName: e.target.value })}
-                      required
-                    />
-                    <InputField
-                      label="Mobile Number"
-                      value={addressForm.phone}
-                      onChange={(e) => setAddressForm({ ...addressForm, phone: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <InputField
-                    label="Address Line"
-                    value={addressForm.line1}
-                    onChange={(e) => setAddressForm({ ...addressForm, line1: e.target.value })}
-                    placeholder="House No, Street, Landmark"
-                    required
-                  />
-                  <div className="grid sm:grid-cols-3 gap-4">
-                    <InputField
-                      label="City"
-                      value={addressForm.city}
-                      onChange={(e) => setAddressForm({ ...addressForm, city: e.target.value })}
-                      required
-                    />
-                    <InputField
-                      label="State"
-                      value={addressForm.state}
-                      onChange={(e) => setAddressForm({ ...addressForm, state: e.target.value })}
-                      required
-                    />
-                    <InputField
-                      label="Pincode"
-                      value={addressForm.postalCode}
-                      onChange={(e) => setAddressForm({ ...addressForm, postalCode: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="flex gap-4">
-                    <Button type="submit" className="flex-1 btn-primary">
-                      Save & Select
+                      ))}
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setIsAddingAddress(true)}
+                    >
+                      Add New Address
                     </Button>
-                    {addresses.length > 0 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setIsAddingAddress(false)}
-                      >
-                        Cancel
-                      </Button>
-                    )}
                   </div>
-                </form>
-              )}
+                ) : (
+                  <form onSubmit={handleAddAddress} className="space-y-4">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <InputField
+                        label="Full Name"
+                        value={addressForm.full_name}
+                        onChange={(e) => setAddressForm({ ...addressForm, full_name: e.target.value })}
+                        required
+                      />
+                      <InputField
+                        label="Mobile Number"
+                        value={addressForm.mobile}
+                        onChange={(e) => setAddressForm({ ...addressForm, mobile: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <InputField
+                      label="Address Line"
+                      value={addressForm.address_line}
+                      onChange={(e) => setAddressForm({ ...addressForm, address_line: e.target.value })}
+                      placeholder="House No, Street, Landmark"
+                      required
+                    />
+                    <div className="grid sm:grid-cols-3 gap-4">
+                      <InputField
+                        label="City"
+                        value={addressForm.city}
+                        onChange={(e) => setAddressForm({ ...addressForm, city: e.target.value })}
+                        required
+                      />
+                      <InputField
+                        label="State"
+                        value={addressForm.state}
+                        onChange={(e) => setAddressForm({ ...addressForm, state: e.target.value })}
+                        required
+                      />
+                      <InputField
+                        label="Pincode"
+                        value={addressForm.pincode}
+                        onChange={(e) => setAddressForm({ ...addressForm, pincode: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="flex gap-4">
+                      <Button type="submit" className="flex-1 btn-primary" disabled={isSavingAddress}>
+                        {isSavingAddress ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          "Save & Select"
+                        )}
+                      </Button>
+                      {addresses.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setIsAddingAddress(false)}
+                          disabled={isSavingAddress}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </form>
+                )}
             </div>
 
             {/* Payment Method Section */}
