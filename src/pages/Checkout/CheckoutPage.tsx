@@ -253,10 +253,20 @@ export default function CheckoutPage() {
                 <h2 className="text-xl font-bold">Delivery Address</h2>
               </div>
 
-              {addressLoading ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                </div>
+                {addressLoading ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  </div>
+                ) : addresses.length === 0 && !isAddingAddress ? (
+                  <div className="text-center py-6">
+                    <p className="text-muted-foreground mb-4">No saved addresses</p>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsAddingAddress(true)}
+                    >
+                      Add New Address
+                    </Button>
+                  </div>
                 ) : addresses.length > 0 && !isAddingAddress ? (
                   <div className="space-y-4">
                     <div className="grid gap-4">
