@@ -13,8 +13,8 @@ type CustomerRow = {
   id: string;
   name: string | null;
   email: string | null;
-  phone: string | null;
-  address: string | null;
+  mobile: string | null;
+  addresses: Record<string, unknown>;
   no_of_orders: number;
 };
 
@@ -38,7 +38,7 @@ export default function CustomersPage() {
 
         const { data, error } = await supabase
           .from("users")
-          .select("id, name, email, phone, address, no_of_orders")
+          .select("id, name, email, mobile, addresses, no_of_orders")
           .neq("role", "admin");
 
         if (!alive) return;
@@ -91,11 +91,11 @@ export default function CustomersPage() {
                             </div>
                             <div className="min-w-0">
                               <div className="text-muted-foreground">Phone</div>
-                              <div className="truncate">{c.phone ?? ""}</div>
+                              <div className="truncate">{c.mobile ?? ""}</div>
                             </div>
                             <div className="min-w-0">
                               <div className="text-muted-foreground">Address</div>
-                              <div className="truncate">{c.address ?? ""}</div>
+                              <div className="truncate">{JSON.stringify(c.addresses)}</div>
                             </div>
                             <div className="min-w-0">
                               <div className="text-muted-foreground">No. of Orders</div>
@@ -124,8 +124,8 @@ export default function CustomersPage() {
                                 <TableRow key={c.id}>
                                   <TableCell className="max-w-[220px] truncate p-2 lg:p-4">{c.name ?? ""}</TableCell>
                                   <TableCell className="max-w-[220px] truncate p-2 lg:p-4">{c.email ?? ""}</TableCell>
-                                  <TableCell className="p-2 lg:p-4">{c.phone ?? ""}</TableCell>
-                                  <TableCell className="max-w-[320px] truncate p-2 lg:p-4">{c.address ?? ""}</TableCell>
+                                  <TableCell className="p-2 lg:p-4">{c.mobile ?? ""}</TableCell>
+                                  <TableCell className="max-w-[320px] truncate p-2 lg:p-4">{JSON.stringify(c.addresses)}</TableCell>
                                   <TableCell className="p-2 lg:p-4">{c.no_of_orders}</TableCell>
                                 </TableRow>
                               ))}
