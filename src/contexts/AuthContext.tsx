@@ -90,34 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Check if user exists in public.users, if not create them
-      const { data: profile, error: profileFetchError } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', session.user.id)
-        .single();
-
-      let resolvedRole: Role = "user";
-
-      if (profileFetchError && profileFetchError.code === 'PGRST116') {
-        // User record missing in public.users, create it
-        const metadata = session.user.user_metadata as any;
-        const { error: insertError } = await supabase.from('users').insert({
-          id: session.user.id,
-          name: metadata?.name || metadata?.full_name || "User",
-          email: session.user.email,
-          phone: metadata?.mobile || "",
-          role: "customer",
-          no_of_orders: 0
-        });
-        
-        if (insertError) {
-          console.error("Error creating missing user profile:", insertError);
-        }
-        resolvedRole = "user";
-      } else if (profile) {
-        resolvedRole = (profile as any).role === "admin" ? "admin" : "user";
-      }
+      const resolvedRole = await fetchUserRole(session.user.id);
 
       if (!mounted) return;
       setUser({
@@ -211,21 +184,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       const u = data.user;
       if (!u) return { ok: true as const }; // may need email verification
-
-      // Create profile in public.users table
-      const { error: profileError } = await supabase.from("users").insert({
-        id: u.id,
-        name,
-        email,
-        phone: mobile,
-        role: "customer",
-        no_of_orders: 0
-      });
-
-      if (profileError) {
-        console.error("Error creating user profile:", profileError);
-      }
-
       setUser({ id: u.id, email: u.email || "", name, createdAt: (u as any)?.created_at || undefined });
       setRole("user");
       return { ok: true as const };
