@@ -6,6 +6,7 @@ import type { Product } from "@/data/products";
 import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/supabase";
+import { WishlistHeart } from "@/components/WishlistHeart";
 
 export default function ProductDetailsPage() {
   const { id } = useParams();
@@ -133,12 +134,15 @@ export default function ProductDetailsPage() {
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Product Images */}
           <div className="space-y-4">
-            <div className="aspect-square rounded-2xl bg-secondary overflow-hidden">
+            <div className="aspect-square rounded-2xl bg-secondary overflow-hidden relative">
               <img
                 src={product.images[0]}
                 alt={product.name}
                 className="w-full h-full object-cover"
               />
+              <div className="absolute top-3 right-3 z-10">
+                <WishlistHeart productId={product.id} />
+              </div>
             </div>
             <div className="grid grid-cols-4 gap-3">
               {[1, 2, 3, 4].map((i) => (

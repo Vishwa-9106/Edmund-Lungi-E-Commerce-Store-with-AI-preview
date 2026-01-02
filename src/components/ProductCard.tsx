@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Star } from "lucide-react";
 import { Product } from "@/data/products";
+import { WishlistHeart } from "@/components/WishlistHeart";
 
 interface ProductCardProps {
   product: Product;
@@ -19,6 +20,9 @@ export function ProductCard({ product }: ProductCardProps) {
           alt={product.name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />
+        <div className={`absolute ${discount > 0 ? "top-14" : "top-3"} right-3 z-10`}>
+          <WishlistHeart productId={product.id} />
+        </div>
         {product.bestseller && (
           <span className="absolute top-3 left-3 bg-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full">
             Bestseller

@@ -6,6 +6,7 @@ import { InputField } from "@/components/InputField";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/supabase";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { ProductCard } from "@/components/ProductCard";
 import type { Product } from "@/data/products";
 import {
@@ -22,6 +23,7 @@ export default function CustomerDashboard() {
   const { user, loading } = useAuth();
   const { toast } = useToast();
   const { addToCart } = useCart();
+  const { wishlist, toggle, isUpdating } = useWishlist();
 
   type Address = {
     id: string;
@@ -75,39 +77,16 @@ export default function CustomerDashboard() {
   const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
   const [selectedTrackingOrderId, setSelectedTrackingOrderId] = useState<string | null>(null);
 
-  type WishlistItemRow = {
-    id: string;
-    user_id: string;
-    product_id: string;
-    created_at: string | null;
-  };
-
-  const [wishlistItems, setWishlistItems] = useState<Array<{ item: WishlistItemRow; product: Product }>>([]);
+  const [wishlistProducts, setWishlistProducts] = useState<Product[]>([]);
   const [wishlistLoading, setWishlistLoading] = useState(false);
-  const [wishlistSaving, setWishlistSaving] = useState(false);
   const [wishlistError, setWishlistError] = useState<string | null>(null);
 
-  const removeWishlistItem = async (productId: string, wishlistItemId: string) => {
+  const removeWishlistItem = async (productId: string) => {
     if (!user?.id) return;
-    setWishlistSaving(true);
-    setWishlistError(null);
     try {
-      const { error } = await supabase
-        .from("wishlist_items")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("product_id", productId);
-
-      if (error) {
-        setWishlistError(error.message || "Failed to update wishlist");
-        return;
-      }
-
-      setWishlistItems((prev) => prev.filter((x) => x.item.id !== wishlistItemId));
+      await toggle(productId);
     } catch (e: any) {
       setWishlistError(e?.message || "Failed to update wishlist");
-    } finally {
-      setWishlistSaving(false);
     }
   };
 
@@ -317,25 +296,9 @@ export default function CustomerDashboard() {
 
     (async () => {
       try {
-        const { data: itemRows, error: itemsError } = await supabase
-          .from("wishlist_items")
-          .select("id, user_id, product_id, created_at")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
-
-        if (!alive) return;
-
-        if (itemsError) {
-          setWishlistItems([]);
-          setWishlistError(itemsError.message || "Failed to load wishlist");
-          return;
-        }
-
-        const items = Array.isArray(itemRows) ? (itemRows as WishlistItemRow[]) : [];
-        const productIds = items.map((r) => r.product_id).filter((id) => typeof id === "string" && id.length > 0);
-
+        const productIds = Array.from(wishlist).filter((id) => typeof id === "string" && id.length > 0);
         if (productIds.length === 0) {
-          setWishlistItems([]);
+          setWishlistProducts([]);
           return;
         }
 
@@ -347,7 +310,7 @@ export default function CustomerDashboard() {
         if (!alive) return;
 
         if (productsError) {
-          setWishlistItems([]);
+          setWishlistProducts([]);
           setWishlistError(productsError.message || "Failed to load wishlist products");
           return;
         }
@@ -372,18 +335,12 @@ export default function CustomerDashboard() {
           };
         });
 
-        const productMap = new Map(mappedProducts.map((p) => [p.id, p] as const));
-        const merged = items
-          .map((it) => {
-            const p = productMap.get(it.product_id);
-            return p ? { item: it, product: p } : null;
-          })
-          .filter(Boolean) as Array<{ item: WishlistItemRow; product: Product }>;
-
-        setWishlistItems(merged);
+        const byId = new Map(mappedProducts.map((p) => [p.id, p] as const));
+        const ordered = productIds.map((id) => byId.get(id)).filter(Boolean) as Product[];
+        setWishlistProducts(ordered);
       } catch (e: any) {
         if (!alive) return;
-        setWishlistItems([]);
+        setWishlistProducts([]);
         setWishlistError(e?.message || "Failed to load wishlist");
       } finally {
         if (!alive) return;
@@ -394,7 +351,7 @@ export default function CustomerDashboard() {
     return () => {
       alive = false;
     };
-  }, [activeKey, user?.id]);
+  }, [activeKey, user?.id, wishlist]);
 
   const createdAtLabel = useMemo(() => {
     if (!user?.createdAt) return "—";
@@ -1131,7 +1088,7 @@ export default function CustomerDashboard() {
                       </div>
                     ))}
                   </div>
-                ) : wishlistItems.length === 0 ? (
+                ) : wishlistProducts.length === 0 ? (
                   <div className="card-elevated p-6">
                     <h2 className="font-semibold text-xl">No saved items</h2>
                     <p className="text-muted-foreground mt-2">
@@ -1140,20 +1097,20 @@ export default function CustomerDashboard() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                    {wishlistItems.map(({ item, product }) => {
+                    {wishlistProducts.map((product) => {
                       const defaultSize = product.sizes?.[0] || "Free Size";
 
                       return (
-                        <div key={item.id} className="space-y-3">
+                        <div key={product.id} className="space-y-3">
                           <ProductCard product={product} />
                           <div className="flex gap-2">
                             <Button
                               type="button"
                               className="btn-primary flex-1"
-                              disabled={wishlistSaving}
+                              disabled={isUpdating(product.id)}
                               onClick={() => {
                                 addToCart(product, defaultSize, 1);
-                                void removeWishlistItem(product.id, item.id);
+                                void removeWishlistItem(product.id);
                                 toast({ title: "Moved to cart", description: "Item added to your cart." });
                               }}
                             >
@@ -1162,9 +1119,9 @@ export default function CustomerDashboard() {
                             <Button
                               type="button"
                               variant="outline"
-                              disabled={wishlistSaving}
+                              disabled={isUpdating(product.id)}
                               onClick={() => {
-                                void removeWishlistItem(product.id, item.id);
+                                void removeWishlistItem(product.id);
                                 toast({ title: "Removed", description: "Item removed from your wishlist." });
                               }}
                             >
