@@ -1,18 +1,36 @@
-import { useState } from "react";
-import { Mail, Phone, MapPin, Clock, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Mail, Phone, MapPin, Clock, Send, Facebook, Instagram, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/supabase";
 
 const ContactPage = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const hasAppliedUserPrefillRef = useRef(false);
+
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
+    name: user?.name || "",
+    email: user?.email || "",
     subject: "",
     message: ""
   });
+
+  useEffect(() => {
+    if (!user) return;
+    if (hasAppliedUserPrefillRef.current) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      name: prev.name || user.name || "",
+      email: prev.email || user.email || "",
+    }));
+
+    hasAppliedUserPrefillRef.current = true;
+  }, [user]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,29 +38,82 @@ const ContactPage = () => {
       title: "Message Sent!",
       description: "We'll get back to you within 24 hours.",
     });
-    setFormData({ name: "", email: "", subject: "", message: "" });
+
+    void (async () => {
+      try {
+        const { error } = await supabase.from("messages").insert({
+          sender_name: formData.name,
+          sender_email: formData.email,
+          subject: formData.subject,
+          message: formData.message,
+          created_at: new Date().toISOString(),
+          read_status: "unread",
+        });
+        if (error) {
+          console.error("Failed to store contact message:", error);
+        }
+      } catch (err) {
+        console.error("Failed to store contact message:", err);
+      }
+    })();
+
+    setFormData({ name: user?.name || "", email: user?.email || "", subject: "", message: "" });
   };
 
   const contactInfo = [
     {
       icon: MapPin,
       title: "Visit Us",
-      details: ["123 Textile Street", "Chennai, Tamil Nadu 600001", "India"]
+      details: [
+        <>
+          <a
+            href="https://www.facebook.com/share/1DmfPCWzYt/?mibextid=wwXIfr"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 underline"
+          >
+            <Facebook className="w-4 h-4" />
+            Facebook
+          </a>
+        </>,
+        <>
+          <a
+            href="https://www.instagram.com/edmund_lungi?igsh=MTE3YWd1bHNoZnc3cw%3D%3D&utm_source=qr"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 underline"
+          >
+            <Instagram className="w-4 h-4" />
+            Instagram
+          </a>
+        </>,
+        <>
+          <a
+            href="https://wa.me/916383329471"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 underline"
+          >
+            <MessageCircle className="w-4 h-4" />
+            WhatsApp
+          </a>
+        </>
+      ]
     },
     {
       icon: Phone,
       title: "Call Us",
-      details: ["+91 98765 43210", "+91 98765 43211"]
+      details: ["+91 63833 29471", "+91 90956 44521"]
     },
     {
       icon: Mail,
       title: "Email Us",
-      details: ["hello@edmundlungi.com", "support@edmundlungi.com"]
+      details: ["edmundlungi@gmail.com"]
     },
     {
       icon: Clock,
       title: "Working Hours",
-      details: ["Mon - Sat: 9AM - 8PM", "Sunday: 10AM - 6PM"]
+      details: ["Online only", "10:00 AM – 6:00 PM"]
     }
   ];
 

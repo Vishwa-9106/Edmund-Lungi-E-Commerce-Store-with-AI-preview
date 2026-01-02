@@ -29,6 +29,7 @@ const AdminOrdersPage = lazy(() => import("@/pages/Admin/OrdersPage"));
 const AdminProductsPage = lazy(() => import("@/pages/Admin/ProductsPage"));
 const AdminCustomersPage = lazy(() => import("@/pages/Admin/CustomersPage"));
 const AdminMarketingPage = lazy(() => import("@/pages/Admin/MarketingPage"));
+const AdminMessagesPage = lazy(() => import("@/pages/Admin/MessagesPage"));
 const CheckoutPage = lazy(() => import("@/pages/Checkout/CheckoutPage"));
 const OrderSuccessPage = lazy(() => import("@/pages/OrderSuccess/OrderSuccessPage"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
@@ -108,6 +109,7 @@ const AppRoutes = () => {
           <Route path="products" element={<AdminProductsPage />} />
           <Route path="customers" element={<AdminCustomersPage />} />
           <Route path="marketing" element={<AdminMarketingPage />} />
+          <Route path="messages" element={<AdminMessagesPage />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />

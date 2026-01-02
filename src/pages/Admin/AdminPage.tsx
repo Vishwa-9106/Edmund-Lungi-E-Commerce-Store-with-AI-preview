@@ -1,6 +1,16 @@
 import { useMemo, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  LayoutDashboard,
+  Megaphone,
+  MessageSquare,
+  Package,
+  ShoppingBag,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -22,17 +32,19 @@ type AdminMenuItem =
   | "Orders"
   | "Products"
   | "Customers"
-  | "Marketing";
+  | "Marketing"
+  | "Messages";
 
 export default function AdminPage() {
-  const items = useMemo<Array<{ label: AdminMenuItem; to: string }>>(
+  const items = useMemo<Array<{ label: AdminMenuItem; to: string; Icon: React.ComponentType<{ className?: string }> }>>(
     () => [
-      { label: "Dashboard", to: "/admin/dashboard" },
-      { label: "Sales Analytics", to: "/admin/sales-analytics" },
-      { label: "Orders", to: "/admin/orders" },
-      { label: "Products", to: "/admin/products" },
-      { label: "Customers", to: "/admin/customers" },
-      { label: "Marketing", to: "/admin/marketing" },
+      { label: "Dashboard", to: "/admin/dashboard", Icon: LayoutDashboard },
+      { label: "Sales Analytics", to: "/admin/sales-analytics", Icon: BarChart3 },
+      { label: "Orders", to: "/admin/orders", Icon: ShoppingBag },
+      { label: "Products", to: "/admin/products", Icon: Package },
+      { label: "Customers", to: "/admin/customers", Icon: Users },
+      { label: "Marketing", to: "/admin/marketing", Icon: Megaphone },
+      { label: "Messages", to: "/admin/messages", Icon: MessageSquare },
     ],
     []
   );
@@ -86,6 +98,7 @@ export default function AdminPage() {
                     cn(
                       "h-10 w-full rounded-md px-3 text-sm font-medium transition-colors",
                       "flex items-center",
+                      !collapsed && "gap-2",
                       collapsed ? "justify-center" : "justify-start",
                       isActive
                         ? "bg-accent text-accent-foreground"
@@ -93,8 +106,8 @@ export default function AdminPage() {
                     )
                   }
                 >
+                  <item.Icon className="h-4 w-4 shrink-0" />
                   <span className={cn("truncate", collapsed && "sr-only")}>{item.label}</span>
-                  {collapsed && <span aria-hidden className="text-sm">{item.label[0]}</span>}
                 </NavLink>
               ))}
             </div>
