@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
@@ -125,15 +125,14 @@ export default function CustomerDashboard() {
   const [activeKey, setActiveKey] = useState<(typeof menu)[number]["key"]>("profile");
   const activeLabel = menu.find((m) => m.key === activeKey)?.label ?? "My Profile";
 
-  useEffect(() => {
-    let alive = true;
-    if (activeKey !== "orders" && activeKey !== "tracking") return;
-    if (!user?.id) return;
+  const fetchOrders = useCallback(
+    async (opts?: { keepLoading?: boolean }) => {
+      if (!user?.id) return;
+      if (!opts?.keepLoading) {
+        setOrdersLoading(true);
+      }
+      setOrdersError(null);
 
-    setOrdersLoading(true);
-    setOrdersError(null);
-
-    (async () => {
       try {
         const { data, error } = await supabase
           .from("orders")
@@ -141,7 +140,6 @@ export default function CustomerDashboard() {
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
 
-        if (!alive) return;
         if (error) {
           setOrders([]);
           setOrdersError(error.message || "Failed to load orders");
@@ -152,26 +150,105 @@ export default function CustomerDashboard() {
         setOrders(rows);
 
         if (activeKey === "tracking") {
-          const existing = selectedTrackingOrderId;
-          const hasExisting = existing && rows.some((r) => r.id === existing);
-          if (!hasExisting) {
-            setSelectedTrackingOrderId(rows[0]?.id ?? null);
-          }
+          setSelectedTrackingOrderId((existing) => {
+            const hasExisting = existing && rows.some((r) => r.id === existing);
+            if (!hasExisting) return rows[0]?.id ?? null;
+            return existing;
+          });
         }
       } catch (e: any) {
-        if (!alive) return;
         setOrders([]);
         setOrdersError(e?.message || "Failed to load orders");
       } finally {
-        if (!alive) return;
-        setOrdersLoading(false);
+        if (!opts?.keepLoading) {
+          setOrdersLoading(false);
+        }
       }
+    },
+    [user?.id, activeKey],
+  );
+
+  const refreshOrderById = useCallback(
+    async (orderId: string) => {
+      if (!user?.id) return;
+      if (!orderId) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("id, order_number, created_at, status, total, currency, items")
+          .eq("user_id", user.id)
+          .eq("id", orderId)
+          .maybeSingle();
+
+        if (error || !data) return;
+
+        const row = data as OrderRow;
+        setOrders((prev) => {
+          const idx = prev.findIndex((o) => o.id === row.id);
+          if (idx === -1) return prev;
+          const next = prev.slice();
+          next[idx] = row;
+          return next;
+        });
+      } catch {
+        // ignore
+      }
+    },
+    [user?.id],
+  );
+
+  useEffect(() => {
+    let alive = true;
+    if (activeKey !== "orders" && activeKey !== "tracking") return;
+    if (!user?.id) return;
+
+    setOrdersLoading(true);
+    setOrdersError(null);
+
+    (async () => {
+      if (!alive) return;
+      await fetchOrders({ keepLoading: true });
+      if (!alive) return;
+      setOrdersLoading(false);
     })();
 
     return () => {
       alive = false;
     };
-  }, [activeKey, user?.id, selectedTrackingOrderId]);
+  }, [activeKey, user?.id, fetchOrders]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (activeKey !== "orders" && activeKey !== "tracking") return;
+
+    const channel = supabase
+      .channel(`orders:dashboard:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders", filter: `user_id=eq.${user.id}` },
+        (payload: any) => {
+          const changedId = String(payload?.new?.id ?? payload?.old?.id ?? "");
+          if (activeKey === "tracking" && changedId && changedId === selectedTrackingOrderId) {
+            void refreshOrderById(changedId);
+            return;
+          }
+          void fetchOrders({ keepLoading: false });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, activeKey, fetchOrders, refreshOrderById, selectedTrackingOrderId]);
+
+  useEffect(() => {
+    if (activeKey !== "tracking") return;
+    if (!user?.id) return;
+    if (!selectedTrackingOrderId) return;
+    void refreshOrderById(selectedTrackingOrderId);
+  }, [activeKey, user?.id, selectedTrackingOrderId, refreshOrderById]);
 
   useEffect(() => {
     let alive = true;
@@ -390,11 +467,16 @@ export default function CustomerDashboard() {
     if (s === "packed") return 2;
     if (s === "confirmed" || s === "processing") return 1;
     if (s === "placed" || s === "pending") return 0;
-    if (s === "cancelled" || s === "canceled") return 0;
     return 0;
   };
 
+  const isTrackingCancelled = (status: string | null) => {
+    const s = (status || "").trim().toLowerCase();
+    return s === "cancelled" || s === "canceled";
+  };
+
   const trackingCurrentStageBadgeClass = (status: string | null) => {
+    if (isTrackingCancelled(status)) return "bg-destructive/10 text-destructive";
     const idx = trackingStageIndex(status);
     if (idx === 4) return "bg-emerald-500/15 text-emerald-700";
     if (idx === 3) return "bg-orange-500/15 text-orange-700";
@@ -976,14 +1058,18 @@ export default function CustomerDashboard() {
                               trackingCurrentStageBadgeClass(trackingOrder.status)
                             }
                           >
-                            {trackingSteps[trackingStageIndex(trackingOrder.status)]?.label ?? "Pending"}
+                            {isTrackingCancelled(trackingOrder.status)
+                              ? "Cancelled"
+                              : trackingSteps[trackingStageIndex(trackingOrder.status)]?.label ?? "Pending"}
                           </span>
                         </div>
 
                         <div className="mt-8">
                           <div className="grid gap-4 sm:grid-cols-5">
                             {trackingSteps.map((step, idx) => {
-                              const current = trackingStageIndex(trackingOrder.status);
+                              const current = isTrackingCancelled(trackingOrder.status)
+                                ? -1
+                                : trackingStageIndex(trackingOrder.status);
                               const isCompleted = idx < current;
                               const isCurrent = idx === current;
 
