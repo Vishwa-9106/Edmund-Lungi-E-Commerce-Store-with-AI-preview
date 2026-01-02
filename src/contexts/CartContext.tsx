@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
-import { Product } from "@/data/products";
+
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import type { Product } from "@/data/products";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface CartItem {
@@ -40,20 +41,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
           quantity: Number(x.quantity ?? 0),
           size: String(x.size ?? ""),
         }))
-        .filter((x) => x.product && typeof x.product === "object" && typeof x.product.id === "string" && x.product.id.length > 0)
+        .filter(
+          (x) =>
+            x.product &&
+            typeof x.product === "object" &&
+            typeof (x.product as any).id === "string" &&
+            (x.product as any).id.length > 0
+        )
         .filter((x) => Number.isFinite(x.quantity) && x.quantity > 0);
     } catch {
       return [];
     }
   };
 
-  // Rehydrate cart after auth session is restored.
   useEffect(() => {
     if (authLoading) return;
 
     const userId = user?.id ?? null;
 
-    // On logout: clear in-memory cart.
     if (!userId) {
       hydratedRef.current = true;
       lastUserIdRef.current = null;
@@ -61,7 +66,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // On first load or user switch: load from storage.
     if (lastUserIdRef.current !== userId) {
       lastUserIdRef.current = userId;
       const raw = window.localStorage.getItem(storageKey(userId));
@@ -70,7 +74,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [authLoading, user?.id]);
 
-  // Persist cart whenever it changes (after hydration).
   useEffect(() => {
     if (authLoading) return;
     if (!hydratedRef.current) return;
@@ -85,9 +88,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addToCart = (product: Product, size: string, quantity: number = 1) => {
     setItems((prevItems) => {
-      const existingItem = prevItems.find(
-        (item) => item.product.id === product.id && item.size === size
-      );
+      const existingItem = prevItems.find((item) => item.product.id === product.id && item.size === size);
 
       if (existingItem) {
         return prevItems.map((item) =>
@@ -112,9 +113,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     setItems((prevItems) =>
-      prevItems.map((item) =>
-        item.product.id === productId ? { ...item, quantity } : item
-      )
+      prevItems.map((item) => (item.product.id === productId ? { ...item, quantity } : item))
     );
   };
 
@@ -123,10 +122,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
-  const totalPrice = items.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
-  );
+  const totalPrice = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
   return (
     <CartContext.Provider

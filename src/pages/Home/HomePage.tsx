@@ -42,7 +42,7 @@ export default function HomePage() {
             <div className="relative animate-fade-in stagger-2">
               <div className="aspect-square rounded-3xl bg-gradient-to-br from-primary/20 to-accent/20 overflow-hidden">
                 <img
-                  src="/placeholder.svg"
+                  src="./header.png"
                   alt="Premium Lungi Collection"
                   className="w-full h-full object-cover animate-float"
                 />
