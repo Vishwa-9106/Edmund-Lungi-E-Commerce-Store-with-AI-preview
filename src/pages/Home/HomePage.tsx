@@ -3,6 +3,7 @@ import { ArrowRight, Star, Truck, Shield, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/ProductCard";
 import { products, categories, testimonials } from "@/data/products";
+import homeHeader from "./home header.png";
 
 export default function HomePage() {
   const featuredProducts = products.filter((p) => p.featured);
@@ -42,7 +43,7 @@ export default function HomePage() {
             <div className="relative animate-fade-in stagger-2">
               <div className="aspect-square rounded-3xl bg-gradient-to-br from-primary/20 to-accent/20 overflow-hidden">
                 <img
-                  src="./header.png"
+                  src={homeHeader}
                   alt="Premium Lungi Collection"
                   className="w-full h-full object-cover animate-float"
                 />

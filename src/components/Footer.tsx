@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Facebook, Instagram, Twitter, Mail, Phone, MapPin } from "lucide-react";
+import { Facebook, Instagram, Mail, Phone, MapPin } from "lucide-react";
 
 export function Footer() {
   return (
@@ -15,14 +15,21 @@ export function Footer() {
               Premium handcrafted lungis for the modern gentleman. Comfort meets tradition.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="p-2 bg-cream/10 rounded-full hover:bg-primary transition-colors">
+              <a
+                href="https://www.facebook.com/share/1DmfPCWzYt/?mibextid=wwXIfr"
+                target="_blank"
+                rel="noreferrer"
+                className="p-2 bg-cream/10 rounded-full hover:bg-primary transition-colors"
+              >
                 <Facebook className="w-5 h-5" />
               </a>
-              <a href="#" className="p-2 bg-cream/10 rounded-full hover:bg-primary transition-colors">
+              <a
+                href="https://www.instagram.com/edmund_lungi?igsh=MTE3YWd1bHNoZnc3cw%3D%3D&utm_source=qr"
+                target="_blank"
+                rel="noreferrer"
+                className="p-2 bg-cream/10 rounded-full hover:bg-primary transition-colors"
+              >
                 <Instagram className="w-5 h-5" />
-              </a>
-              <a href="#" className="p-2 bg-cream/10 rounded-full hover:bg-primary transition-colors">
-                <Twitter className="w-5 h-5" />
               </a>
             </div>
           </div>
@@ -67,15 +74,23 @@ export function Footer() {
             <ul className="space-y-3">
               <li className="flex items-center gap-3 text-cream/70">
                 <MapPin className="w-5 h-5 text-primary flex-shrink-0" />
-                <span>123 Textile Street, Chennai, India</span>
+                <span>
+                  9/121, Komarapalayam,
+                  <br />
+                  Erode, Tamil Nadu, India
+                </span>
               </li>
               <li className="flex items-center gap-3 text-cream/70">
                 <Phone className="w-5 h-5 text-primary flex-shrink-0" />
-                <span>+91 98765 43210</span>
+                <a href="tel:6383329471" className="hover:text-primary transition-colors">
+                  6383329471
+                </a>
               </li>
               <li className="flex items-center gap-3 text-cream/70">
                 <Mail className="w-5 h-5 text-primary flex-shrink-0" />
-                <span>hello@edmundlungi.com</span>
+                <a href="mailto:edmundlungi@gmail.com" className="hover:text-primary transition-colors">
+                  edmundlungi@gmail.com
+                </a>
               </li>
             </ul>
           </div>
