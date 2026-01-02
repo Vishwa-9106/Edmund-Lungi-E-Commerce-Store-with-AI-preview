@@ -394,6 +394,15 @@ export default function CustomerDashboard() {
     return 0;
   };
 
+  const trackingCurrentStageBadgeClass = (status: string | null) => {
+    const idx = trackingStageIndex(status);
+    if (idx === 4) return "bg-emerald-500/15 text-emerald-700";
+    if (idx === 3) return "bg-orange-500/15 text-orange-700";
+    if (idx === 2) return "bg-indigo-500/15 text-indigo-700";
+    if (idx === 1) return "bg-[#0a2540]/15 text-[#0a2540]";
+    return "bg-[#6b7280]/15 text-[#6b7280]";
+  };
+
   const trackingStatusClass = (status: string | null) => {
     const s = (status || "Pending").toString().toLowerCase();
     if (s === "delivered" || s === "completed") return "bg-sage/20 text-sage";
@@ -961,8 +970,13 @@ export default function CustomerDashboard() {
                               {orderDateLabel(trackingOrder.created_at)}
                             </p>
                           </div>
-                          <span className={`text-xs px-2 py-1 rounded-full ${trackingStatusClass(trackingOrder.status)}`}>
-                            {(trackingOrder.status || "Pending").toString()}
+                          <span
+                            className={
+                              `text-xs px-3 py-1 rounded-full font-semibold ` +
+                              trackingCurrentStageBadgeClass(trackingOrder.status)
+                            }
+                          >
+                            {trackingSteps[trackingStageIndex(trackingOrder.status)]?.label ?? "Pending"}
                           </span>
                         </div>
 
@@ -974,7 +988,7 @@ export default function CustomerDashboard() {
                               const isCurrent = idx === current;
 
                               const badgeClass = isCompleted
-                                ? "bg-sage/20 text-sage"
+                                ? "bg-[#0a2540]/10 text-[#0a2540]"
                                 : isCurrent
                                   ? "bg-amber/20 text-amber"
                                   : "bg-secondary/50 text-muted-foreground";
@@ -984,7 +998,12 @@ export default function CustomerDashboard() {
                                   <div className="flex items-center gap-3 w-full">
                                     <span className={`text-xs px-2 py-1 rounded-full ${badgeClass}`}>{step.label}</span>
                                     {idx < trackingSteps.length - 1 && (
-                                      <div className="hidden sm:block flex-1 h-px bg-border" />
+                                      <div
+                                        className={
+                                          "hidden sm:block flex-1 h-px " +
+                                          (isCompleted ? "bg-[#0a2540]" : "bg-border")
+                                        }
+                                      />
                                     )}
                                   </div>
                                 </div>

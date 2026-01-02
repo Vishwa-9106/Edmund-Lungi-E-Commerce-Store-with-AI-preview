@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/supabase";
 import { toast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -42,6 +41,40 @@ type OrderRow = {
 
 type UserEmailById = Record<string, string>;
 
+type UserDetails = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  mobile?: string | null;
+};
+
+type ProductDetails = {
+  id: string;
+  name: string;
+  image_url: string | null;
+};
+
+type NormalizedOrderItem = {
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number;
+};
+
+type OrderModalData = {
+  loading: boolean;
+  error: string | null;
+  user: UserDetails | null;
+  items: Array<{
+    productId: string;
+    name: string;
+    imageUrl: string | null;
+    price: number;
+    quantity: number;
+    subtotal: number;
+  }>;
+};
+
 const ALL_STATUSES: OrderStatus[] = ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
 
 function normalizeStatus(status: string | null | undefined): OrderStatus {
@@ -62,6 +95,28 @@ function formatMoney(total: number | string | null, currency: string | null) {
   if (typeof n !== "number" || Number.isNaN(n)) return "-";
   if (!currency) return n.toFixed(2);
   return `${n.toFixed(2)}`;
+}
+
+function parseOrderItems(raw: unknown): NormalizedOrderItem[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as any[])
+    .filter((x) => x && typeof x === "object")
+    .map((x) => {
+      const productId = String((x as any).id ?? (x as any).productId ?? "").trim();
+      const name = String((x as any).name ?? "").trim();
+      const price = Number((x as any).price ?? 0);
+      const quantity = Number((x as any).quantity ?? (x as any).qty ?? 0);
+      return {
+        productId,
+        name,
+        price,
+        quantity,
+      };
+    })
+    .filter((x) => x.productId.length > 0)
+    .filter((x) => x.name.length > 0)
+    .filter((x) => Number.isFinite(x.price) && x.price >= 0)
+    .filter((x) => Number.isFinite(x.quantity) && x.quantity > 0);
 }
 
 function statusBadgeVariant(status: OrderStatus): "default" | "secondary" | "destructive" | "outline" {
@@ -86,6 +141,10 @@ export default function OrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [updatingOrderIds, setUpdatingOrderIds] = useState<Set<string>>(new Set());
   const [userEmails, setUserEmails] = useState<UserEmailById>({});
+
+  const [itemsDialogOpen, setItemsDialogOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [orderModalCache, setOrderModalCache] = useState<Record<string, OrderModalData>>({});
 
   const userIds = useMemo(() => {
     const ids = new Set<string>();
@@ -130,6 +189,98 @@ export default function OrdersPage() {
       alive = false;
     };
   }, []);
+
+  const selectedOrder = useMemo(() => {
+    if (!selectedOrderId) return null;
+    return orders.find((o) => o.id === selectedOrderId) ?? null;
+  }, [orders, selectedOrderId]);
+
+  const ensureModalDataLoaded = useCallback(
+    async (order: OrderRow) => {
+      const existing = orderModalCache[order.id];
+      if (existing && !existing.error && existing.items.length > 0) return;
+
+      setOrderModalCache((prev) => ({
+        ...prev,
+        [order.id]: {
+          loading: true,
+          error: null,
+          user: prev[order.id]?.user ?? null,
+          items: prev[order.id]?.items ?? [],
+        },
+      }));
+
+      try {
+        const parsedItems = parseOrderItems(order.items);
+        const productIds = Array.from(new Set(parsedItems.map((x) => x.productId)));
+
+        const [{ data: userRow }, { data: productRows, error: productErr }] = await Promise.all([
+          supabase
+            .from("users")
+            .select("id, name, email, mobile")
+            .eq("id", order.user_id)
+            .maybeSingle(),
+          productIds.length === 0
+            ? Promise.resolve({ data: [] as any[], error: null as any })
+            : supabase
+                .from("products")
+                .select("id, name, image_url")
+                .in("id", productIds),
+        ]);
+
+        if (productErr) throw productErr;
+
+        const productById = new Map(
+          (Array.isArray(productRows) ? (productRows as ProductDetails[]) : []).map((p) => [String(p.id), p] as const),
+        );
+
+        const hydratedItems = parsedItems.map((it) => {
+          const p = productById.get(it.productId);
+          const imageUrl = p?.image_url ?? null;
+          const name = (p?.name ?? it.name).toString();
+          const subtotal = it.price * it.quantity;
+          return {
+            productId: it.productId,
+            name,
+            imageUrl,
+            price: it.price,
+            quantity: it.quantity,
+            subtotal,
+          };
+        });
+
+        const user: UserDetails | null = userRow
+          ? {
+              id: String((userRow as any).id),
+              name: (userRow as any).name ?? null,
+              email: (userRow as any).email ?? null,
+              mobile: (userRow as any).mobile ?? null,
+            }
+          : null;
+
+        setOrderModalCache((prev) => ({
+          ...prev,
+          [order.id]: {
+            loading: false,
+            error: null,
+            user,
+            items: hydratedItems,
+          },
+        }));
+      } catch (e: any) {
+        setOrderModalCache((prev) => ({
+          ...prev,
+          [order.id]: {
+            loading: false,
+            error: e?.message || "Failed to load order items",
+            user: prev[order.id]?.user ?? null,
+            items: prev[order.id]?.items ?? [],
+          },
+        }));
+      }
+    },
+    [orderModalCache],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -267,22 +418,18 @@ export default function OrdersPage() {
                     </TableCell>
                     <TableCell>{formatDateTime(order.created_at)}</TableCell>
                     <TableCell className="text-right">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button type="button" variant="outline" size="sm">
-                            View
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-3xl">
-                          <DialogHeader>
-                            <DialogTitle>Order Items</DialogTitle>
-                            <DialogDescription>Order #{order.order_number || order.id}</DialogDescription>
-                          </DialogHeader>
-                          <pre className="max-h-[60vh] overflow-auto rounded-md bg-muted p-4 text-xs">
-                            {JSON.stringify(order.items ?? null, null, 2)}
-                          </pre>
-                        </DialogContent>
-                      </Dialog>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedOrderId(order.id);
+                          setItemsDialogOpen(true);
+                          void ensureModalDataLoaded(order);
+                        }}
+                      >
+                        View
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
@@ -291,6 +438,135 @@ export default function OrdersPage() {
           </Table>
         </div>
       )}
+
+      <Dialog
+        open={itemsDialogOpen}
+        onOpenChange={(open) => {
+          setItemsDialogOpen(open);
+          if (!open) setSelectedOrderId(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Order Items</DialogTitle>
+            <DialogDescription>Order #{selectedOrder?.order_number || selectedOrder?.id || "-"}</DialogDescription>
+          </DialogHeader>
+
+          {!selectedOrder ? (
+            <div className="text-sm text-muted-foreground">No order selected.</div>
+          ) : (
+            (() => {
+              const modal = orderModalCache[selectedOrder.id];
+              const userLabelFallback = userEmails[selectedOrder.user_id] || selectedOrder.user_id;
+
+              const displayName = modal?.user?.name?.toString().trim()
+                ? String(modal.user.name)
+                : "-";
+              const displayContact = modal?.user?.email || modal?.user?.mobile || userLabelFallback;
+
+              if (modal?.loading) {
+                return (
+                  <div className="min-h-[220px] flex items-center justify-center">
+                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                );
+              }
+
+              if (modal?.error) {
+                return (
+                  <div className="rounded-md border border-border bg-background p-4">
+                    <div className="text-sm font-medium">Failed to load order items</div>
+                    <div className="text-sm text-muted-foreground">{modal.error}</div>
+                  </div>
+                );
+              }
+
+              const items = modal?.items ?? [];
+
+              return (
+                <div className="space-y-4">
+                  <div className="rounded-md border border-border bg-muted/30 p-4">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <div className="text-xs text-muted-foreground">User Name</div>
+                        <div className="text-sm font-semibold">{displayName}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">User Email / Mobile</div>
+                        <div className="text-sm font-semibold truncate" title={String(displayContact)}>
+                          {displayContact}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Order Number</div>
+                        <div className="text-sm font-semibold">{selectedOrder.order_number || "-"}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {items.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No items found for this order.</div>
+                  ) : (
+                    <div className="max-h-[55vh] overflow-auto pr-1">
+                      <div className="space-y-3">
+                        {items.map((it) => (
+                          <div
+                            key={`${selectedOrder.id}:${it.productId}`}
+                            className="rounded-md border border-border bg-background p-3"
+                          >
+                            <div className="flex gap-3">
+                              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
+                                {it.imageUrl ? (
+                                  <img
+                                    src={it.imageUrl}
+                                    alt={it.name}
+                                    className="h-full w-full object-cover"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="h-full w-full" />
+                                )}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-semibold truncate" title={it.name}>
+                                      {it.name}
+                                    </div>
+                                    <div className="mt-1 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-muted-foreground sm:grid-cols-4">
+                                      <div>
+                                        <div className="text-muted-foreground">Price</div>
+                                        <div className="text-foreground font-medium">
+                                          {formatMoney(it.price, selectedOrder.currency)}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="text-muted-foreground">Qty</div>
+                                        <div className="text-foreground font-medium">{it.quantity}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-muted-foreground">Subtotal</div>
+                                        <div className="text-foreground font-medium">
+                                          {formatMoney(it.subtotal, selectedOrder.currency)}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
