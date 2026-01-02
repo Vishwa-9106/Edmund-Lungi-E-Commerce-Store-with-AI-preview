@@ -27,6 +27,8 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const generateOrderNumber = () => `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
@@ -97,7 +99,6 @@ export default function CheckoutPage() {
         setSelectedAddressId(list[0].id);
       }
     } catch (error: any) {
-      console.error("Error fetching addresses:", error);
       toast({
         title: "Error",
         description: "Failed to load saved addresses.",
@@ -207,46 +208,107 @@ export default function CheckoutPage() {
     const address = addresses.find((a) => a.id === selectedAddressId);
     if (!address) return;
 
-        try {
-          setIsPlacingOrder(true);
+    try {
+      setIsPlacingOrder(true);
 
-          const orderData = {
-            user_id: user.id,
-            order_number: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            items: [
-              ...items.map((item) => ({
-                name: item.product.name,
-                qty: item.quantity,
-                price: item.product.price,
-                size: item.size,
-              })),
-              {
-                _metadata: true,
-                type: "delivery_address",
-                address: address
-              },
-              {
-                _metadata: true,
-                type: "payment_info",
-                method: "COD"
-              }
-            ],
-            total: totalPrice,
-            currency: "INR",
-            status: "placed",
-            created_at: new Date().toISOString(),
-          };
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sessionData.session?.access_token) {
+        throw new Error("Your session has expired. Please login again.");
+      }
 
-          const { error } = await supabase.from("orders").insert(orderData);
+      const sessionUserId = sessionData.session.user.id;
 
-      if (error) throw error;
+      const normalizedCart = items
+        .map((it) => ({
+          productId: String(it.product.id),
+          name: String(it.product.name ?? ""),
+          price: Number(it.product.price ?? 0),
+          quantity: Number(it.quantity ?? 0),
+        }))
+        .filter((it) => it.productId.length > 0 && it.name.length > 0)
+        .filter((it) => Number.isFinite(it.price) && it.price >= 0)
+        .filter((it) => Number.isFinite(it.quantity) && it.quantity > 0);
+
+      if (normalizedCart.length === 0) {
+        toast({
+          title: "Cart Error",
+          description: "Your cart is empty or contains invalid items.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const aggregated = Array.from(
+        normalizedCart
+          .reduce((m, it) => {
+            const existing = m.get(it.productId);
+            if (!existing) {
+              m.set(it.productId, { ...it });
+            } else {
+              m.set(it.productId, {
+                ...existing,
+                quantity: Number(existing.quantity ?? 0) + Number(it.quantity ?? 0),
+              });
+            }
+            return m;
+          }, new Map<string, { productId: string; name: string; price: number; quantity: number }>())
+          .values()
+      );
+
+      const productIds = aggregated.map((x) => x.productId);
+      const { data: stockRows, error: stockReadError } = await supabase
+        .from("products")
+        .select("id, stock_quantity, is_active")
+        .in("id", productIds)
+        .eq("is_active", true);
+
+      if (stockReadError) throw stockReadError;
+
+      const stockById = new Map(
+        (Array.isArray(stockRows) ? stockRows : []).map((r: any) => [String(r.id), Number(r.stock_quantity ?? 0)] as const)
+      );
+
+      for (const it of aggregated) {
+        const available = stockById.get(it.productId);
+        if (available == null) {
+          throw new Error("One or more items are out of stock.");
+        }
+        if (!Number.isFinite(available) || available < it.quantity) {
+          throw new Error(`Insufficient stock for ${it.name}.`);
+        }
+      }
+
+      const orderNumber = generateOrderNumber();
+      const orderInsertPayload = {
+        user_id: sessionUserId,
+        order_number: orderNumber,
+        status: "placed",
+        total: totalPrice,
+        currency: "INR",
+        items: aggregated.map((it) => ({
+          id: it.productId,
+          name: it.name,
+          price: it.price,
+          quantity: it.quantity,
+        })),
+      };
+
+      const { error: placeError } = await supabase.rpc("place_order", {
+        p_order_number: orderInsertPayload.order_number,
+        p_total: orderInsertPayload.total,
+        p_currency: orderInsertPayload.currency,
+        p_status: orderInsertPayload.status,
+        p_items: orderInsertPayload.items,
+      });
+      if (placeError) throw placeError;
 
       clearCart();
       navigate("/order-success");
     } catch (error: any) {
       toast({
         title: "Order Failed",
-        description: error.message || "Something went wrong while placing your order.",
+        description: error?.message || "Something went wrong while placing your order.",
         variant: "destructive",
       });
     } finally {

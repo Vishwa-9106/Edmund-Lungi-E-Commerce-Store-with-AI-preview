@@ -347,7 +347,7 @@ export default function CustomerDashboard() {
       .filter((x) => x && typeof x === "object" && !(x as any)._metadata)
       .map((x) => ({
         name: String((x as any).name ?? ""),
-        qty: Number((x as any).qty ?? 0),
+        qty: Number((x as any).quantity ?? (x as any).qty ?? 0),
         price: Number((x as any).price ?? 0),
       }))
       .filter((x) => x.name.length > 0);
@@ -369,8 +369,9 @@ export default function CustomerDashboard() {
 
   const trackingSteps = useMemo(
     () => [
-      { key: "placed", label: "Placed" },
+      { key: "pending", label: "Pending" },
       { key: "confirmed", label: "Confirmed" },
+      { key: "packed", label: "Packed" },
       { key: "shipped", label: "Shipped" },
       { key: "delivered", label: "Delivered" },
     ],
@@ -384,8 +385,9 @@ export default function CustomerDashboard() {
 
   const trackingStageIndex = (status: string | null) => {
     const s = (status || "").trim().toLowerCase();
-    if (s === "delivered" || s === "completed") return 3;
-    if (s === "shipped") return 2;
+    if (s === "delivered" || s === "completed") return 4;
+    if (s === "shipped") return 3;
+    if (s === "packed") return 2;
     if (s === "confirmed" || s === "processing") return 1;
     if (s === "placed" || s === "pending") return 0;
     if (s === "cancelled" || s === "canceled") return 0;
@@ -965,7 +967,7 @@ export default function CustomerDashboard() {
                         </div>
 
                         <div className="mt-8">
-                          <div className="grid gap-4 sm:grid-cols-4">
+                          <div className="grid gap-4 sm:grid-cols-5">
                             {trackingSteps.map((step, idx) => {
                               const current = trackingStageIndex(trackingOrder.status);
                               const isCompleted = idx < current;

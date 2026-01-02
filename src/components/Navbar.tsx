@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
+import logo from "./edmund lungi's logo.png";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +36,11 @@ export function Navbar() {
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
+            <img
+              src={logo}
+              alt="Edmund Lungi's Logo"
+              className="h-12 w-12 object-contain"
+            />
             <span className="font-display text-xl md:text-2xl font-semibold gradient-text">
               Edmund Lungi's
             </span>
