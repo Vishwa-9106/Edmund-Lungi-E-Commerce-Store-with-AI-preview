@@ -4,8 +4,9 @@ import { ProductCard } from "@/components/ProductCard";
 import type { Product } from "@/data/products";
 import { Button } from "@/components/ui/button";
 
-const colors = ["All", "Maroon", "Blue", "Gold", "White", "Green", "Navy", "Multi", "Cream"];
-const materials = ["All", "Pure Silk", "100% Cotton", "Cotton", "Silk Blend", "Silk Cotton", "Cotton Blend"];
+const colors = ["All","Blue","Sandal","Grey","Maroon","Black","Green","White","Yellow","Orange","Brown"];
+
+const materials = ["All", "Cotton Mixed", "Cotton", "Lungi", "Pure Cotton", "Dhoti"];
 const priceRanges = [
   { label: "All", min: 0, max: Infinity },
   { label: "Under ₹500", min: 0, max: 500 },
@@ -105,7 +106,7 @@ export default function ShopPage() {
       const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (product.description ?? "").toLowerCase().includes(searchQuery.toLowerCase());
       const matchesColor = selectedColor === "All" || product.color === selectedColor;
-      const matchesMaterial = selectedMaterial === "All" || product.material === selectedMaterial;
+      const matchesMaterial = selectedMaterial === "All" || product.material === selectedMaterial || product.category === selectedMaterial ;
       const matchesPrice = product.price >= selectedPriceRange.min && product.price <= selectedPriceRange.max;
 
       return matchesSearch && matchesColor && matchesMaterial && matchesPrice;
