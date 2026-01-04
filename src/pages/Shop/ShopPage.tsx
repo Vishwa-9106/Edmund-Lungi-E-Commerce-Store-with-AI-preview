@@ -25,6 +25,7 @@ export default function ShopPage() {
   const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedColor, setSelectedColor] = useState("All");
   const [selectedMaterial, setSelectedMaterial] = useState("All");
   const [selectedPriceRange, setSelectedPriceRange] = useState(priceRanges[0]);
@@ -43,6 +44,7 @@ export default function ShopPage() {
   const updateUrlQuery = (next: {
     page?: number;
     q?: string;
+    category?: string;
     color?: string;
     material?: string;
     price?: string;
@@ -58,6 +60,7 @@ export default function ShopPage() {
     };
 
     setOrDelete("q", next.q ?? searchQuery);
+    setOrDelete("category", next.category ?? selectedCategory);
     setOrDelete("color", next.color ?? selectedColor);
     setOrDelete("material", next.material ?? selectedMaterial);
     setOrDelete("price", next.price ?? selectedPriceRange.label);
@@ -69,6 +72,7 @@ export default function ShopPage() {
     const params = new URLSearchParams(location.search);
 
     const q = params.get("q") ?? "";
+    const category = params.get("category") ?? "All";
     const color = params.get("color") ?? "All";
     const material = params.get("material") ?? "All";
     const priceLabel = params.get("price") ?? "All";
@@ -79,6 +83,7 @@ export default function ShopPage() {
     const nextPriceRange = priceRanges.find((r) => r.label === priceLabel) ?? priceRanges[0];
 
     setSearchQuery(q);
+    setSelectedCategory(category);
     setSelectedColor(color);
     setSelectedMaterial(material);
     setSelectedPriceRange(nextPriceRange);
@@ -109,6 +114,10 @@ export default function ShopPage() {
             { count: "exact" },
           )
           .eq("is_active", true);
+
+        if (selectedCategory !== "All") {
+          query = query.eq("category", selectedCategory);
+        }
 
         if (selectedColor !== "All") {
           query = query.eq("color", selectedColor);
@@ -179,18 +188,19 @@ export default function ShopPage() {
     return () => {
       alive = false;
     };
-  }, [page, searchQuery, selectedColor, selectedMaterial, selectedPriceRange]);
+  }, [page, searchQuery, selectedCategory, selectedColor, selectedMaterial, selectedPriceRange]);
 
   const clearFilters = () => {
     setSearchQuery("");
+    setSelectedCategory("All");
     setSelectedColor("All");
     setSelectedMaterial("All");
     setSelectedPriceRange(priceRanges[0]);
     setPage(1);
-    updateUrlQuery({ page: 1, q: "", color: "All", material: "All", price: "All" });
+    updateUrlQuery({ page: 1, q: "", category: "All", color: "All", material: "All", price: "All" });
   };
 
-  const hasActiveFilters = searchQuery || selectedColor !== "All" || selectedMaterial !== "All" || selectedPriceRange.label !== "All";
+  const hasActiveFilters = searchQuery || selectedCategory !== "All" || selectedColor !== "All" || selectedMaterial !== "All" || selectedPriceRange.label !== "All";
 
   const showPagination = !loading && totalCount > PRODUCTS_PER_PAGE;
 
