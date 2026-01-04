@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { ProductCard } from "@/components/ProductCard";
 import type { Product } from "@/data/products";
 import { Button } from "@/components/ui/button";
+import { useLocation, useNavigate } from "react-router-dom";
+import supabase from "@/supabase";
 
 const colors = ["All","Blue","Sandal","Grey","Maroon","Black","Green","White","Yellow","Orange","Brown"];
 
@@ -16,55 +18,130 @@ const priceRanges = [
   { label: "Above ₹5000", min: 5000, max: Infinity },
 ];
 
+const PRODUCTS_PER_PAGE = 12;
+
 export default function ShopPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedColor, setSelectedColor] = useState("All");
   const [selectedMaterial, setSelectedMaterial] = useState("All");
   const [selectedPriceRange, setSelectedPriceRange] = useState(priceRanges[0]);
   const [showFilters, setShowFilters] = useState(false);
 
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const didFetchRef = useRef(false);
+
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(totalCount / PRODUCTS_PER_PAGE));
+  }, [totalCount]);
+
+  const updateUrlQuery = (next: {
+    page?: number;
+    q?: string;
+    color?: string;
+    material?: string;
+    price?: string;
+  }) => {
+    const params = new URLSearchParams(location.search);
+
+    const nextPage = next.page ?? page;
+    params.set("page", String(nextPage));
+
+    const setOrDelete = (key: string, value: string | undefined) => {
+      if (value == null || value.length === 0) params.delete(key);
+      else params.set(key, value);
+    };
+
+    setOrDelete("q", next.q ?? searchQuery);
+    setOrDelete("color", next.color ?? selectedColor);
+    setOrDelete("material", next.material ?? selectedMaterial);
+    setOrDelete("price", next.price ?? selectedPriceRange.label);
+
+    navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : "" }, { replace: true });
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+
+    const q = params.get("q") ?? "";
+    const color = params.get("color") ?? "All";
+    const material = params.get("material") ?? "All";
+    const priceLabel = params.get("price") ?? "All";
+
+    const parsedPageRaw = Number(params.get("page") ?? "1");
+    const parsedPage = Number.isFinite(parsedPageRaw) && parsedPageRaw > 0 ? Math.floor(parsedPageRaw) : 1;
+
+    const nextPriceRange = priceRanges.find((r) => r.label === priceLabel) ?? priceRanges[0];
+
+    setSearchQuery(q);
+    setSelectedColor(color);
+    setSelectedMaterial(material);
+    setSelectedPriceRange(nextPriceRange);
+    setPage(parsedPage);
+  }, [location.search]);
+
+  useEffect(() => {
+    if (page <= totalPages) return;
+    const nextPage = Math.max(1, totalPages);
+    setPage(nextPage);
+    updateUrlQuery({ page: nextPage });
+  }, [page, totalPages]);
 
   useEffect(() => {
     let alive = true;
-    if (didFetchRef.current) return;
-    didFetchRef.current = true;
-
-    setLoading(true);
-
-    (async () => {
+    const fetchProducts = async () => {
+      setLoading(true);
       try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-        if (!supabaseUrl || !supabaseAnonKey) {
-          setProducts([]);
-          return;
+        const safePage = Math.max(1, page);
+        const offset = (safePage - 1) * PRODUCTS_PER_PAGE;
+        const from = offset;
+        const to = offset + PRODUCTS_PER_PAGE - 1;
+
+        let query = supabase
+          .from("products")
+          .select(
+            "id,name,price,original_price,image_url,category,material,sizes,stock_quantity,is_active,description,color",
+            { count: "exact" },
+          )
+          .eq("is_active", true);
+
+        if (selectedColor !== "All") {
+          query = query.eq("color", selectedColor);
         }
 
-        let origin = supabaseUrl;
-        try {
-          origin = new URL(supabaseUrl).origin;
-        } catch {
-          // ignore
+        if (selectedMaterial !== "All") {
+          query = query.or(`material.eq.${selectedMaterial},category.eq.${selectedMaterial}`);
         }
 
-        const url = `${origin}/rest/v1/products?select=id,name,price,original_price,image_url,category,material,sizes,stock_quantity,is_active,description,color&is_active=eq.true`;
-        const res = await fetch(url, {
-          headers: {
-            apikey: supabaseAnonKey,
-            Authorization: `Bearer ${supabaseAnonKey}`,
-          },
-        });
+        if (selectedPriceRange.min > 0) {
+          query = query.gte("price", selectedPriceRange.min);
+        }
+        if (Number.isFinite(selectedPriceRange.max) && selectedPriceRange.max !== Infinity) {
+          query = query.lte("price", selectedPriceRange.max);
+        }
+
+        const trimmedQ = searchQuery.trim();
+        if (trimmedQ.length > 0) {
+          const escaped = trimmedQ.replace(/%/g, "\\%").replace(/_/g, "\\_");
+          query = query.or(`name.ilike.%${escaped}%,description.ilike.%${escaped}%`);
+        }
+
+        const { data, error, count } = await query.order("id", { ascending: true }).range(from, to);
 
         if (!alive) return;
-        if (!res.ok) {
+        if (error) {
           setProducts([]);
+          setTotalCount(0);
           return;
         }
 
-        const data = (await res.json()) as unknown;
+        setTotalCount(count ?? 0);
+
         const rows = Array.isArray(data) ? data : [];
         const mapped: Product[] = rows.map((row: any) => {
           const imageUrl = typeof row.image_url === "string" && row.image_url.length > 0 ? row.image_url : "/placeholder.svg";
@@ -90,37 +167,47 @@ export default function ShopPage() {
       } catch {
         if (!alive) return;
         setProducts([]);
+        setTotalCount(0);
       } finally {
         if (!alive) return;
         setLoading(false);
       }
-    })();
+    };
+
+    fetchProducts();
 
     return () => {
       alive = false;
     };
-  }, []);
-
-  const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (product.description ?? "").toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesColor = selectedColor === "All" || product.color === selectedColor;
-      const matchesMaterial = selectedMaterial === "All" || product.material === selectedMaterial || product.category === selectedMaterial ;
-      const matchesPrice = product.price >= selectedPriceRange.min && product.price <= selectedPriceRange.max;
-
-      return matchesSearch && matchesColor && matchesMaterial && matchesPrice;
-    });
-  }, [products, searchQuery, selectedColor, selectedMaterial, selectedPriceRange]);
+  }, [page, searchQuery, selectedColor, selectedMaterial, selectedPriceRange]);
 
   const clearFilters = () => {
     setSearchQuery("");
     setSelectedColor("All");
     setSelectedMaterial("All");
     setSelectedPriceRange(priceRanges[0]);
+    setPage(1);
+    updateUrlQuery({ page: 1, q: "", color: "All", material: "All", price: "All" });
   };
 
   const hasActiveFilters = searchQuery || selectedColor !== "All" || selectedMaterial !== "All" || selectedPriceRange.label !== "All";
+
+  const showPagination = !loading && totalCount > PRODUCTS_PER_PAGE;
+
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+
+    const set = new Set<number>();
+    set.add(1);
+    set.add(totalPages);
+    set.add(page);
+    set.add(page - 1);
+    set.add(page + 1);
+
+    return Array.from(set)
+      .filter((p) => p >= 1 && p <= totalPages)
+      .sort((a, b) => a - b);
+  }, [page, totalPages]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -159,7 +246,12 @@ export default function ShopPage() {
                     type="text"
                     placeholder="Search products..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      const nextQ = e.target.value;
+                      setSearchQuery(nextQ);
+                      setPage(1);
+                      updateUrlQuery({ page: 1, q: nextQ });
+                    }}
                     className="input-field w-full pl-10"
                   />
                 </div>
@@ -172,7 +264,11 @@ export default function ShopPage() {
                   {priceRanges.map((range) => (
                     <button
                       key={range.label}
-                      onClick={() => setSelectedPriceRange(range)}
+                      onClick={() => {
+                        setSelectedPriceRange(range);
+                        setPage(1);
+                        updateUrlQuery({ page: 1, price: range.label });
+                      }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                         selectedPriceRange.label === range.label
                           ? "bg-primary text-primary-foreground"
@@ -192,7 +288,11 @@ export default function ShopPage() {
                   {colors.map((color) => (
                     <button
                       key={color}
-                      onClick={() => setSelectedColor(color)}
+                      onClick={() => {
+                        setSelectedColor(color);
+                        setPage(1);
+                        updateUrlQuery({ page: 1, color });
+                      }}
                       className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
                         selectedColor === color
                           ? "bg-primary text-primary-foreground"
@@ -212,7 +312,11 @@ export default function ShopPage() {
                   {materials.map((material) => (
                     <button
                       key={material}
-                      onClick={() => setSelectedMaterial(material)}
+                      onClick={() => {
+                        setSelectedMaterial(material);
+                        setPage(1);
+                        updateUrlQuery({ page: 1, material });
+                      }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                         selectedMaterial === material
                           ? "bg-primary text-primary-foreground"
@@ -238,7 +342,7 @@ export default function ShopPage() {
             {/* Mobile Filter Toggle */}
             <div className="flex items-center justify-between mb-6 lg:hidden">
               <p className="text-sm text-muted-foreground">
-                {filteredProducts.length} products
+                {products.length} products
               </p>
               <Button
                 variant="outline"
@@ -254,7 +358,7 @@ export default function ShopPage() {
             {/* Desktop Results Count */}
             <div className="hidden lg:flex items-center justify-between mb-6">
               <p className="text-muted-foreground">
-                Showing {filteredProducts.length} of {products.length} products
+                Showing {products.length} of {totalCount} products
               </p>
             </div>
 
@@ -262,10 +366,20 @@ export default function ShopPage() {
             {loading ? (
               <div className="text-sm text-muted-foreground">Loading...</div>
             ) : products.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No products available</div>
-            ) : filteredProducts.length > 0 ? (
+              hasActiveFilters ? (
+                <div className="text-center py-16">
+                  <p className="text-xl font-semibold mb-2">No products found</p>
+                  <p className="text-muted-foreground mb-6">
+                    Try adjusting your filters or search query
+                  </p>
+                  <Button onClick={clearFilters}>Clear Filters</Button>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">No products available</div>
+              )
+            ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
-                {filteredProducts.map((product, i) => (
+                {products.map((product, i) => (
                   <div
                     key={product.id}
                     className="animate-fade-in"
@@ -275,13 +389,55 @@ export default function ShopPage() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="text-center py-16">
-                <p className="text-xl font-semibold mb-2">No products found</p>
-                <p className="text-muted-foreground mb-6">
-                  Try adjusting your filters or search query
-                </p>
-                <Button onClick={clearFilters}>Clear Filters</Button>
+            )}
+
+            {showPagination && (
+              <div className="mt-10 flex items-center justify-center gap-2">
+                <Button
+                  variant="outline"
+                  disabled={page <= 1}
+                  onClick={() => {
+                    const nextPage = Math.max(1, page - 1);
+                    setPage(nextPage);
+                    updateUrlQuery({ page: nextPage });
+                  }}
+                >
+                  Previous
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  {pageNumbers.map((p, idx) => {
+                    const prev = idx > 0 ? pageNumbers[idx - 1] : null;
+                    const showEllipsis = prev != null && p - prev > 1;
+
+                    return (
+                      <div key={p} className="flex items-center gap-2">
+                        {showEllipsis && <span className="px-1 text-muted-foreground">…</span>}
+                        <Button
+                          variant={p === page ? "default" : "outline"}
+                          onClick={() => {
+                            setPage(p);
+                            updateUrlQuery({ page: p });
+                          }}
+                        >
+                          {p}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  disabled={page >= totalPages}
+                  onClick={() => {
+                    const nextPage = Math.min(totalPages, page + 1);
+                    setPage(nextPage);
+                    updateUrlQuery({ page: nextPage });
+                  }}
+                >
+                  Next
+                </Button>
               </div>
             )}
           </div>
